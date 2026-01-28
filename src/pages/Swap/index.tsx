@@ -80,7 +80,13 @@ export default function Swap() {
   const [allowedSlippage] = useUserSlippageTolerance()
 
   // swap state
-  const { independentField, typedValue, recipient } = useSwapState()
+  const {
+    independentField,
+    typedValue,
+    recipient,
+    [Field.INPUT]: { currencyId: inputCurrencyId },
+    [Field.OUTPUT]: { currencyId: outputCurrencyId }
+  } = useSwapState()
   const {
     v1Trade,
     v2Trade,
@@ -278,6 +284,13 @@ export default function Swap() {
 
   useEffect(() => {
     if (!configuredTokenAddress) return
+    const inputId = inputCurrencyId ?? ''
+    const outputId = outputCurrencyId ?? ''
+    const tokenId = configuredTokenAddress.toLowerCase()
+    const isValidPair =
+      (inputId.toLowerCase() === 'eth' && outputId.toLowerCase() === tokenId) ||
+      (inputId.toLowerCase() === tokenId && outputId.toLowerCase() === 'eth')
+    if (isValidPair) return
     dispatch(
       replaceSwapState({
         typedValue,
@@ -287,7 +300,15 @@ export default function Swap() {
         recipient
       })
     )
-  }, [configuredTokenAddress, dispatch, independentField, recipient, typedValue])
+  }, [
+    configuredTokenAddress,
+    dispatch,
+    independentField,
+    inputCurrencyId,
+    outputCurrencyId,
+    recipient,
+    typedValue
+  ])
 
   return (
     <>
@@ -328,11 +349,10 @@ export default function Swap() {
             />
             <AutoColumn justify="space-between">
               <AutoRow justify={isExpertMode ? 'space-between' : 'center'} style={{ padding: '0 1rem' }}>
-                <ArrowWrapper clickable={!isPairLocked}>
+                <ArrowWrapper clickable>
                   <ArrowDown
                     size="16"
                     onClick={() => {
-                      if (isPairLocked) return
                       setApprovalSubmitted(false) // reset 2 step UI for approvals
                       onSwitchTokens()
                     }}

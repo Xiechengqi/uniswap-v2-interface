@@ -1,4 +1,4 @@
-import React, { useRef, useContext, useMemo, useState } from 'react'
+import React, { useRef, useContext, useMemo, useState, useEffect } from 'react'
 import { Settings, X } from 'react-feather'
 import styled from 'styled-components'
 import { useOnClickOutside } from '../../hooks/useOnClickOutside'
@@ -190,6 +190,7 @@ export default function SettingsTab() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [testMessage, setTestMessage] = useState<string | null>(null)
   const [isTesting, setIsTesting] = useState(false)
+  const [pairAddressDisplay, setPairAddressDisplay] = useState<string>('')
 
   // show confirmation view before turning on
   const [showConfirmation, setShowConfirmation] = useState(false)
@@ -265,6 +266,42 @@ export default function SettingsTab() {
       setIsTesting(false)
     }
   }
+
+  useEffect(() => {
+    let stale = false
+    const fetchPairAddress = async () => {
+      if (!rpcUrl || !routerAddress || !tokenAddress) {
+        if (!stale) setPairAddressDisplay('')
+        return
+      }
+      try {
+        const provider = new JsonRpcProvider(rpcUrl)
+        const router = new Contract(
+          routerAddress,
+          ['function WETH() view returns (address)', 'function factory() view returns (address)'],
+          provider
+        )
+        const [weth, factory] = await Promise.all([router.WETH(), router.factory()])
+        if (!factory || !weth) {
+          if (!stale) setPairAddressDisplay('')
+          return
+        }
+        const factoryContract = new Contract(factory, ['function getPair(address,address) view returns (address)'], provider)
+        const pair = await factoryContract.getPair(weth, tokenAddress)
+        if (!stale) setPairAddressDisplay(String(pair))
+      } catch (error) {
+        if (!stale) setPairAddressDisplay('')
+      }
+    }
+
+    fetchPairAddress().catch(() => {
+      if (!stale) setPairAddressDisplay('')
+    })
+
+    return () => {
+      stale = true
+    }
+  }, [rpcUrl, routerAddress, tokenAddress])
 
   const handleResetConfig = () => {
     clearConfigFromStorage(chainId)
@@ -421,6 +458,12 @@ export default function SettingsTab() {
                 }}
                 placeholder="0x..."
               />
+            </ConfigRow>
+            <ConfigRow>
+              <TYPE.black fontWeight={400} fontSize={12} color={theme.text2}>
+                Pair Address (read-only)
+              </TYPE.black>
+              <ConfigInput value={pairAddressDisplay} readOnly placeholder="Auto from Router/Factory" />
             </ConfigRow>
             <RowBetween>
               <RowFixed>
