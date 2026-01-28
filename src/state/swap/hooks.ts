@@ -3,7 +3,7 @@ import { Version } from '../../hooks/useToggledVersion'
 import { parseUnits } from '@ethersproject/units'
 import { Currency, CurrencyAmount, ETHER, JSBI, Token, TokenAmount, Trade } from '@im33357/uniswap-v2-sdk'
 import { ParsedQs } from 'qs'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useV1Trade } from '../../data/V1'
 import { useActiveWeb3React } from '../../hooks'
@@ -20,6 +20,8 @@ import useToggledVersion from '../../hooks/useToggledVersion'
 import { useUserSlippageTolerance } from '../user/hooks'
 import { computeSlippageAdjustedAmounts } from '../../utils/prices'
 import { DeploymentInfo } from '@im33357/uniswap-v2-sdk'
+import { Contract } from '@ethersproject/contracts'
+import ERC20_ABI from '../../constants/abis/erc20.json'
 
 export function useSwapState(): AppState['swap'] {
   return useSelector<AppState, AppState['swap']>(state => state.swap)
@@ -117,7 +119,7 @@ export function useDerivedSwapInfo(): {
   inputError?: string
   v1Trade: Trade | undefined
 } {
-  const { account } = useActiveWeb3React()
+  const { account, library, chainId } = useActiveWeb3React()
 
   const toggledVersion = useToggledVersion()
 
@@ -143,8 +145,58 @@ export function useDerivedSwapInfo(): {
   const effectiveOutputCurrencyId =
     normalizedLocked && !hasLockedPair ? lockedTokenAddress : outputCurrencyId
 
-  const inputCurrency = useCurrency(effectiveInputCurrencyId)
-  const outputCurrency = useCurrency(effectiveOutputCurrencyId)
+  const [lockedTokenMeta, setLockedTokenMeta] = useState<{ symbol: string; name: string; decimals: number } | null>(null)
+
+  useEffect(() => {
+    let stale = false
+    const loadMeta = async () => {
+      if (!lockedTokenAddress || !chainId || !library) return
+      try {
+        const contract = new Contract(lockedTokenAddress, ERC20_ABI, library)
+        const [symbol, name, decimals] = await Promise.all([
+          contract.symbol().catch(() => 'TOKEN'),
+          contract.name().catch(() => 'Token'),
+          contract.decimals().catch(() => 18)
+        ])
+        if (!stale) {
+          setLockedTokenMeta({
+            symbol: String(symbol) || 'TOKEN',
+            name: String(name) || 'Token',
+            decimals: Number(decimals) || 18
+          })
+        }
+      } catch {
+        if (!stale) {
+          setLockedTokenMeta({
+            symbol: 'TOKEN',
+            name: 'Token',
+            decimals: 18
+          })
+        }
+      }
+    }
+    loadMeta()
+    return () => {
+      stale = true
+    }
+  }, [chainId, library, lockedTokenAddress])
+
+  const lockedToken = useMemo(() => {
+    if (!lockedTokenAddress || !chainId) return undefined
+    const meta = lockedTokenMeta ?? { symbol: 'TOKEN', name: 'Token', decimals: 18 }
+    return new Token(chainId, lockedTokenAddress, meta.decimals, meta.symbol, meta.name)
+  }, [chainId, lockedTokenAddress, lockedTokenMeta])
+
+  const inputCurrency = lockedToken
+    ? normalizedInput === lockedToken.address.toLowerCase()
+      ? lockedToken
+      : ETHER
+    : useCurrency(effectiveInputCurrencyId)
+  const outputCurrency = lockedToken
+    ? normalizedOutput === lockedToken.address.toLowerCase()
+      ? lockedToken
+      : ETHER
+    : useCurrency(effectiveOutputCurrencyId)
   const recipientLookup = useENS(recipient ?? undefined)
   const to: string | null = (recipient === null ? account : recipientLookup.address) ?? null
 
