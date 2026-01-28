@@ -5,6 +5,7 @@ import { useSelectedTokenList } from '../state/lists/hooks'
 import { NEVER_RELOAD, useSingleCallResult } from '../state/multicall/hooks'
 import { useUserAddedTokens } from '../state/user/hooks'
 import { isAddress } from '../utils'
+import { getPrivateChainId } from '../utils/switchNetwork'
 
 import { useActiveWeb3React } from './index'
 import { useBytes32TokenContract, useTokenContract } from './useContract'
@@ -13,11 +14,11 @@ export function useAllTokens(): { [address: string]: Token } {
   const { chainId } = useActiveWeb3React()
   const userAddedTokens = useUserAddedTokens()
   const allTokens = useSelectedTokenList()
+  const effectiveChainId = chainId ?? getPrivateChainId()
 
   return useMemo(() => {
-    if (!chainId) return {}
     // 安全获取当前链的 token，如果不存在则返回空对象
-    const chainTokens = allTokens[chainId] || {}
+    const chainTokens = allTokens[effectiveChainId] || {}
     return (
       userAddedTokens
         // reduce into all ALL_TOKENS filtered by the current chain
@@ -31,7 +32,7 @@ export function useAllTokens(): { [address: string]: Token } {
           { ...chainTokens }
         )
     )
-  }, [chainId, userAddedTokens, allTokens])
+  }, [effectiveChainId, userAddedTokens, allTokens])
 }
 
 // Check if currency is included in custom list from user storage
