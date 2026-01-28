@@ -1,7 +1,7 @@
 import useENS from '../../hooks/useENS'
 import { Version } from '../../hooks/useToggledVersion'
 import { parseUnits } from '@ethersproject/units'
-import { Currency, CurrencyAmount, ETHER, JSBI, Token, TokenAmount, Trade } from '@im33357/uniswap-v2-sdk'
+import { Currency, CurrencyAmount, ETHER, JSBI, Token, TokenAmount, Trade, Route, TradeType } from '@im33357/uniswap-v2-sdk'
 import { ParsedQs } from 'qs'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
@@ -10,6 +10,7 @@ import { useActiveWeb3React } from '../../hooks'
 import { getTokenAddress } from '../../utils/appConfig'
 import { useCurrency } from '../../hooks/Tokens'
 import { useTradeExactIn, useTradeExactOut } from '../../hooks/Trades'
+import { usePair } from '../../data/Reserves'
 import useParsedQueryString from '../../hooks/useParsedQueryString'
 import { isAddress } from '../../utils'
 import { AppDispatch, AppState } from '../index'
@@ -245,10 +246,28 @@ export function useDerivedSwapInfo(): {
   const isExactIn: boolean = independentField === Field.INPUT
   const parsedAmount = tryParseAmount(typedValue, (isExactIn ? inputCurrency : outputCurrency) ?? undefined)
 
+  const [directPairState, directPair] = usePair(inputCurrency ?? undefined, outputCurrency ?? undefined)
+
+  const directTrade = useMemo(() => {
+    if (!directPair || !parsedAmount || !inputCurrency || !outputCurrency) return undefined
+    try {
+      const route = new Route([directPair], inputCurrency, outputCurrency)
+      return new Trade(route, parsedAmount, isExactIn ? TradeType.EXACT_INPUT : TradeType.EXACT_OUTPUT)
+    } catch (error) {
+      console.debug('[swap] direct trade failed', {
+        error,
+        directPairState,
+        inputSymbol: inputCurrency?.symbol,
+        outputSymbol: outputCurrency?.symbol
+      })
+      return undefined
+    }
+  }, [directPair, directPairState, inputCurrency, outputCurrency, isExactIn, parsedAmount])
+
   const bestTradeExactIn = useTradeExactIn(isExactIn ? parsedAmount : undefined, outputCurrency ?? undefined)
   const bestTradeExactOut = useTradeExactOut(inputCurrency ?? undefined, !isExactIn ? parsedAmount : undefined)
 
-  const v2Trade = isExactIn ? bestTradeExactIn : bestTradeExactOut
+  const v2Trade = directTrade ?? (isExactIn ? bestTradeExactIn : bestTradeExactOut)
 
   const currencyBalances = {
     [Field.INPUT]: relevantTokenBalances[0],
@@ -319,11 +338,13 @@ export function useDerivedSwapInfo(): {
       parsedAmount: parsedAmount?.toExact?.() ?? null,
       inputSymbol: inputCurrency?.symbol,
       outputSymbol: outputCurrency?.symbol,
+      directPairState,
+      hasDirectTrade: Boolean(directTrade),
       v2Trade: Boolean(v2Trade),
       v2Route: v2Trade?.route?.path?.map(t => t.symbol),
       inputError
     })
-  }, [isExactIn, typedValue, parsedAmount, inputCurrency, outputCurrency, v2Trade, inputError])
+  }, [isExactIn, typedValue, parsedAmount, inputCurrency, outputCurrency, v2Trade, inputError, directPairState, directTrade])
 
   return {
     currencies,
