@@ -280,7 +280,11 @@ export function useDerivedSwapInfo(): {
         const pairAddress = await factory.getPair(wethAddress, lockedTokenAddress)
         if (!pairAddress || pairAddress === AddressZero) return
         const pairContract = new Contract(pairAddress, IUniswapV2PairABI, library)
-        const reserves = await pairContract.getReserves()
+        const [reserves, pairToken0, pairToken1] = await Promise.all([
+          pairContract.getReserves(),
+          pairContract.token0(),
+          pairContract.token1()
+        ])
         const wethToken = new Token(chainId, wethAddress, 18, 'WETH', 'Wrapped Ether')
         const tokenMeta = lockedTokenMeta ?? { symbol: 'TOKEN', name: 'Token', decimals: 18 }
         const token = new Token(chainId, lockedTokenAddress, tokenMeta.decimals, tokenMeta.symbol, tokenMeta.name)
@@ -292,6 +296,9 @@ export function useDerivedSwapInfo(): {
           pairAddress,
           token0: token0.address,
           token1: token1.address,
+          pairToken0,
+          pairToken1,
+          tokenDecimals: tokenMeta.decimals,
           reserve0: reserve0.toString(),
           reserve1: reserve1.toString()
         })
@@ -390,6 +397,7 @@ export function useDerivedSwapInfo(): {
   }
 
   const lastTradeLogRef = useRef(0)
+  const lastQuoteLogRef = useRef(0)
 
   useEffect(() => {
     const now = Date.now()
@@ -422,6 +430,20 @@ export function useDerivedSwapInfo(): {
     hasForcedPair,
     forcedWeth
   ])
+
+  useEffect(() => {
+    if (!v2Trade) return
+    const now = Date.now()
+    if (now - lastQuoteLogRef.current < 2000) return
+    lastQuoteLogRef.current = now
+    console.debug('[swap] quote', {
+      inputRaw: v2Trade.inputAmount?.raw?.toString?.() ?? null,
+      inputDecimals: v2Trade.inputAmount?.currency?.decimals ?? null,
+      outputRaw: v2Trade.outputAmount?.raw?.toString?.() ?? null,
+      outputDecimals: v2Trade.outputAmount?.currency?.decimals ?? null,
+      outputExact: v2Trade.outputAmount?.toExact?.() ?? null
+    })
+  }, [v2Trade])
 
   return {
     currencies,
