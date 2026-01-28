@@ -187,16 +187,19 @@ export function useDerivedSwapInfo(): {
     return new Token(chainId, lockedTokenAddress, meta.decimals, meta.symbol, meta.name)
   }, [chainId, lockedTokenAddress, lockedTokenMeta])
 
+  const defaultInputCurrency = useCurrency(effectiveInputCurrencyId)
+  const defaultOutputCurrency = useCurrency(effectiveOutputCurrencyId)
+
   const inputCurrency = lockedToken
     ? normalizedInput === lockedToken.address.toLowerCase()
       ? lockedToken
       : ETHER
-    : useCurrency(effectiveInputCurrencyId)
+    : defaultInputCurrency
   const outputCurrency = lockedToken
     ? normalizedOutput === lockedToken.address.toLowerCase()
       ? lockedToken
       : ETHER
-    : useCurrency(effectiveOutputCurrencyId)
+    : defaultOutputCurrency
   const recipientLookup = useENS(recipient ?? undefined)
   const to: string | null = (recipient === null ? account : recipientLookup.address) ?? null
 
