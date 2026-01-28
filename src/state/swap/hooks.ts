@@ -285,9 +285,16 @@ export function useDerivedSwapInfo(): {
         const tokenMeta = lockedTokenMeta ?? { symbol: 'TOKEN', name: 'Token', decimals: 18 }
         const token = new Token(chainId, lockedTokenAddress, tokenMeta.decimals, tokenMeta.symbol, tokenMeta.name)
         const [token0, token1] = wethToken.sortsBefore(token) ? [wethToken, token] : [token, wethToken]
-        const reserve0 = token0.equals(wethToken) ? reserves.reserve0 : reserves.reserve1
-        const reserve1 = token1.equals(token) ? reserves.reserve1 : reserves.reserve0
+        const reserve0 = reserves.reserve0
+        const reserve1 = reserves.reserve1
         const pair = new Pair(new TokenAmount(token0, reserve0.toString()), new TokenAmount(token1, reserve1.toString()))
+        console.debug('[swap] direct pair built', {
+          pairAddress,
+          token0: token0.address,
+          token1: token1.address,
+          reserve0: reserve0.toString(),
+          reserve1: reserve1.toString()
+        })
         if (!stale) setDirectPair(pair)
       } catch (error) {
         console.debug('[swap] direct pair fetch failed', error)
