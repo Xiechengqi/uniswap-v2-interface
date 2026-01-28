@@ -23,6 +23,7 @@ import { computeSlippageAdjustedAmounts } from '../../utils/prices'
 import { DeploymentInfo } from '@im33357/uniswap-v2-sdk'
 import { Contract } from '@ethersproject/contracts'
 import ERC20_ABI from '../../constants/abis/erc20.json'
+import { wrappedCurrency } from '../../utils/wrappedCurrency'
 
 export function useSwapState(): AppState['swap'] {
   return useSelector<AppState, AppState['swap']>(state => state.swap)
@@ -246,7 +247,12 @@ export function useDerivedSwapInfo(): {
   const isExactIn: boolean = independentField === Field.INPUT
   const parsedAmount = tryParseAmount(typedValue, (isExactIn ? inputCurrency : outputCurrency) ?? undefined)
 
-  const [directPairState, directPair] = usePair(inputCurrency ?? undefined, outputCurrency ?? undefined)
+  const forcedWeth = useMemo(() => wrappedCurrency(ETHER, chainId), [chainId])
+  const hasForcedPair = Boolean(lockedToken && forcedWeth)
+  const [directPairState, directPair] = usePair(
+    hasForcedPair ? forcedWeth : inputCurrency ?? undefined,
+    hasForcedPair ? lockedToken : outputCurrency ?? undefined
+  )
 
   const directTrade = useMemo(() => {
     if (!directPair || !parsedAmount || !inputCurrency || !outputCurrency) return undefined
@@ -343,13 +349,27 @@ export function useDerivedSwapInfo(): {
       parsedAmount: parsedAmount?.toExact?.() ?? null,
       inputSymbol: inputCurrency?.symbol,
       outputSymbol: outputCurrency?.symbol,
+      hasForcedPair,
+      forcedWeth: forcedWeth?.address ?? null,
       directPairState,
       hasDirectTrade: Boolean(directTrade),
       v2Trade: Boolean(v2Trade),
       v2Route: v2Trade?.route?.path?.map(t => t.symbol),
       inputError
     })
-  }, [isExactIn, typedValue, parsedAmount, inputCurrency, outputCurrency, v2Trade, inputError, directPairState, directTrade])
+  }, [
+    isExactIn,
+    typedValue,
+    parsedAmount,
+    inputCurrency,
+    outputCurrency,
+    v2Trade,
+    inputError,
+    directPairState,
+    directTrade,
+    hasForcedPair,
+    forcedWeth
+  ])
 
   return {
     currencies,
