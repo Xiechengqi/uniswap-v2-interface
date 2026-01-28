@@ -70,6 +70,7 @@ function useAllCommonPairs(currencyA?: Currency, currencyB?: Currency): Pair[] {
 
   // only pass along valid pairs, non-duplicated pairs
   const lastLogRef = useRef(0)
+  const lastSigRef = useRef<string>('')
 
   return useMemo(() => {
     const states = allPairs.map(([state, pair]) => ({
@@ -78,9 +79,17 @@ function useAllCommonPairs(currencyA?: Currency, currencyB?: Currency): Pair[] {
       token0: pair?.token0?.address ?? null,
       token1: pair?.token1?.address ?? null
     }))
+    const signature = JSON.stringify({
+      chainId,
+      tokenA: tokenA?.address ?? null,
+      tokenB: tokenB?.address ?? null,
+      bases: bases.map(base => base.address),
+      combinations: allPairCombinations.map(([a, b]) => [a.address, b.address])
+    })
     const now = Date.now()
-    if (now - lastLogRef.current > 2000) {
+    if ((signature !== lastSigRef.current && now - lastLogRef.current > 1000) || now - lastLogRef.current > 10000) {
       lastLogRef.current = now
+      lastSigRef.current = signature
       console.debug('[trade] pairs summary', {
         chainId,
         tokenA: tokenA?.address ?? null,
