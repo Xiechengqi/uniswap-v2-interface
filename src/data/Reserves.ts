@@ -1,14 +1,15 @@
 import { TokenAmount, Pair, Currency } from '@im33357/uniswap-v2-sdk'
-import { useMemo } from 'react'
+import { AddressZero } from '@ethersproject/constants'
+import { Contract } from '@ethersproject/contracts'
+import { useEffect, useMemo, useState } from 'react'
 import { abi as IUniswapV2PairABI } from '@uniswap/v2-core/build/IUniswapV2Pair.json'
-import { Interface } from '@ethersproject/abi'
 import { useActiveWeb3React } from '../hooks'
 
-import { useMultipleContractSingleData } from '../state/multicall/hooks'
 import { wrappedCurrency } from '../utils/wrappedCurrency'
-import { getPairAddress } from '../utils/appConfig'
+import { getRouterAddress } from '../utils/appConfig'
 
-const PAIR_INTERFACE = new Interface(IUniswapV2PairABI)
+const ROUTER_FACTORY_ABI = ['function factory() view returns (address)']
+const FACTORY_GET_PAIR_ABI = ['function getPair(address,address) view returns (address)']
 
 export enum PairState {
   LOADING,
@@ -17,8 +18,14 @@ export enum PairState {
   INVALID
 }
 
+type PairLookupResult = {
+  loading: boolean
+  reserves?: { reserve0: string; reserve1: string }
+  error?: boolean
+}
+
 export function usePairs(currencies: [Currency | undefined, Currency | undefined][]): [PairState, Pair | null][] {
-  const { chainId } = useActiveWeb3React()
+  const { chainId, library } = useActiveWeb3React()
 
   const tokens = useMemo(
     () =>
@@ -29,22 +36,86 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
     [chainId, currencies]
   )
 
-  const pairAddresses = useMemo(
-    () =>
-      tokens.map(([tokenA, tokenB]) => {
-        if (!tokenA || !tokenB || tokenA.equals(tokenB)) return undefined
-        const configuredPairAddress = getPairAddress(chainId ?? undefined)
-        if (configuredPairAddress) return configuredPairAddress
-        return Pair.getAddress(tokenA, tokenB)
-      }),
-    [tokens, chainId]
-  )
+  const [results, setResults] = useState<PairLookupResult[]>([])
 
-  const results = useMultipleContractSingleData(pairAddresses, PAIR_INTERFACE, 'getReserves')
+  useEffect(() => {
+    let stale = false
+
+    const fetchPairs = async () => {
+      if (!library || tokens.length === 0) {
+        if (!stale) setResults(tokens.map(() => ({ loading: false })))
+        return
+      }
+
+      const initial = tokens.map<PairLookupResult>(() => ({ loading: true }))
+      if (!stale) setResults(initial)
+
+      const routerAddress = getRouterAddress(chainId ?? undefined)
+
+      const pairAddresses = tokens.map(() => undefined as string | undefined)
+
+      try {
+        if (!routerAddress) {
+          if (!stale) setResults(tokens.map(() => ({ loading: false })))
+          return
+        }
+
+        const routerContract = new Contract(routerAddress, ROUTER_FACTORY_ABI, library)
+        const factoryAddress = await routerContract.factory()
+        if (!factoryAddress || factoryAddress === AddressZero) {
+          if (!stale) setResults(tokens.map(() => ({ loading: false })))
+          return
+        }
+
+        const factoryContract = new Contract(factoryAddress, FACTORY_GET_PAIR_ABI, library)
+        const pairLookups = await Promise.all(
+          tokens.map(([tokenA, tokenB]) => {
+            if (!tokenA || !tokenB || tokenA.equals(tokenB)) return Promise.resolve(undefined)
+            return factoryContract.getPair(tokenA.address, tokenB.address)
+          })
+        )
+
+        pairLookups.forEach((address, index) => {
+          if (typeof address === 'string' && address !== AddressZero) {
+            pairAddresses[index] = address
+          }
+        })
+
+        const reservesResults = await Promise.all(
+          pairAddresses.map(address => {
+            if (!address) return Promise.resolve(undefined)
+            const pairContract = new Contract(address, IUniswapV2PairABI, library)
+            return pairContract.getReserves()
+          })
+        )
+
+        const nextResults = tokens.map<PairLookupResult>(([tokenA, tokenB], index) => {
+          if (!tokenA || !tokenB || tokenA.equals(tokenB)) return { loading: false }
+          const reserves = reservesResults[index]
+          if (!reserves) return { loading: false }
+          return {
+            loading: false,
+            reserves: { reserve0: reserves.reserve0.toString(), reserve1: reserves.reserve1.toString() }
+          }
+        })
+
+        if (!stale) setResults(nextResults)
+      } catch (error) {
+        console.debug('Failed to fetch pair reserves via router', error)
+        if (!stale) setResults(tokens.map(() => ({ loading: false, error: true })))
+      }
+    }
+
+    fetchPairs().catch(error => console.debug('Failed to load pairs', error))
+
+    return () => {
+      stale = true
+    }
+  }, [chainId, library, tokens])
 
   return useMemo(() => {
     return results.map((result, i) => {
-      const { result: reserves, loading } = result
+      const { reserves, loading } = result
       const tokenA = tokens[i][0]
       const tokenB = tokens[i][1]
 
@@ -55,7 +126,7 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
       const [token0, token1] = tokenA.sortsBefore(tokenB) ? [tokenA, tokenB] : [tokenB, tokenA]
       return [
         PairState.EXISTS,
-        new Pair(new TokenAmount(token0, reserve0.toString()), new TokenAmount(token1, reserve1.toString()))
+        new Pair(new TokenAmount(token0, reserve0), new TokenAmount(token1, reserve1))
       ]
     })
   }, [results, tokens])

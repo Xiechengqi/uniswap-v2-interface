@@ -30,17 +30,19 @@ import { useSwapCallback } from '../../hooks/useSwapCallback'
 import useToggledVersion, { Version } from '../../hooks/useToggledVersion'
 import useWrapCallback, { WrapType } from '../../hooks/useWrapCallback'
 import { useToggleSettingsMenu, useWalletModalToggle } from '../../state/application/hooks'
-import { Field } from '../../state/swap/actions'
+import { Field, replaceSwapState } from '../../state/swap/actions'
 import {
   useDefaultsFromURLSearch,
   useDerivedSwapInfo,
   useSwapActionHandlers,
   useSwapState
 } from '../../state/swap/hooks'
+import { useDispatch } from 'react-redux'
 import { useExpertModeManager, useUserDeadline, useUserSlippageTolerance } from '../../state/user/hooks'
 import { LinkStyledButton, TYPE } from '../../theme'
 import { maxAmountSpend } from '../../utils/maxAmountSpend'
 import { computeTradePriceBreakdown, warningSeverity } from '../../utils/prices'
+import { getTokenAddress } from '../../utils/appConfig'
 import AppBody from '../AppBody'
 import { ClickableText } from '../Pool/styleds'
 import Loader from '../../components/Loader'
@@ -64,6 +66,7 @@ export default function Swap() {
 
   const { account } = useActiveWeb3React()
   const theme = useContext(ThemeContext)
+  const dispatch = useDispatch()
 
   // toggle wallet when disconnected
   const toggleWalletModal = useWalletModalToggle()
@@ -262,6 +265,9 @@ export default function Swap() {
     [onCurrencySelection]
   )
 
+  const configuredTokenAddress = getTokenAddress()
+  const isPairLocked = Boolean(configuredTokenAddress)
+
   const handleMaxInput = useCallback(() => {
     maxAmountInput && onUserInput(Field.INPUT, maxAmountInput.toExact())
   }, [maxAmountInput, onUserInput])
@@ -269,6 +275,19 @@ export default function Swap() {
   const handleOutputSelect = useCallback(outputCurrency => onCurrencySelection(Field.OUTPUT, outputCurrency), [
     onCurrencySelection
   ])
+
+  useEffect(() => {
+    if (!configuredTokenAddress) return
+    dispatch(
+      replaceSwapState({
+        typedValue,
+        field: independentField,
+        inputCurrencyId: 'ETH',
+        outputCurrencyId: configuredTokenAddress,
+        recipient
+      })
+    )
+  }, [configuredTokenAddress, dispatch, independentField, recipient, typedValue])
 
   return (
     <>
@@ -304,14 +323,16 @@ export default function Swap() {
               onMax={handleMaxInput}
               onCurrencySelect={handleInputSelect}
               otherCurrency={currencies[Field.OUTPUT]}
+              disableCurrencySelect={isPairLocked}
               id="swap-currency-input"
             />
             <AutoColumn justify="space-between">
               <AutoRow justify={isExpertMode ? 'space-between' : 'center'} style={{ padding: '0 1rem' }}>
-                <ArrowWrapper clickable>
+                <ArrowWrapper clickable={!isPairLocked}>
                   <ArrowDown
                     size="16"
                     onClick={() => {
+                      if (isPairLocked) return
                       setApprovalSubmitted(false) // reset 2 step UI for approvals
                       onSwitchTokens()
                     }}
@@ -333,6 +354,7 @@ export default function Swap() {
               currency={currencies[Field.OUTPUT]}
               onCurrencySelect={handleOutputSelect}
               otherCurrency={currencies[Field.INPUT]}
+              disableCurrencySelect={isPairLocked}
               id="swap-currency-output"
             />
 

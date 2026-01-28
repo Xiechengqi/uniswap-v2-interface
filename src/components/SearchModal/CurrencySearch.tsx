@@ -8,10 +8,8 @@ import { ThemeContext } from 'styled-components'
 import { useActiveWeb3React } from '../../hooks'
 import { useAllTokens, useToken } from '../../hooks/Tokens'
 import { useSelectedListInfo } from '../../state/lists/hooks'
-import { CloseIcon, ExternalLink, LinkStyledButton, TYPE } from '../../theme'
+import { CloseIcon, LinkStyledButton, TYPE } from '../../theme'
 import { isAddress } from '../../utils'
-import { getBlockscoutUrl } from '../../utils/appConfig'
-import { isPrivateChain } from '../../utils/switchNetwork'
 import Card from '../Card'
 import Column from '../Column'
 import ListLogo from '../ListLogo'
@@ -47,8 +45,6 @@ export function CurrencySearch({
   const { t } = useTranslation()
   const { chainId } = useActiveWeb3React()
   const theme = useContext(ThemeContext)
-  const isPrivate = chainId ? isPrivateChain(chainId) : false
-  const blockscoutUrl = chainId ? getBlockscoutUrl(chainId) : ''
 
   const fixedList = useRef<FixedSizeList>()
   const [searchQuery, setSearchQuery] = useState<string>('')
@@ -213,12 +209,6 @@ export function CurrencySearch({
               {selectedListInfo.current ? 'Change' : 'Select a list'}
             </LinkStyledButton>
           </RowBetween>
-          {isPrivate && blockscoutUrl ? (
-            <Text fontSize={12} color={theme.text2} style={{ marginTop: 8 }}>
-              Blockscout token list（仅私链有效）:{' '}
-              <ExternalLink href={blockscoutUrl}>{blockscoutUrl}</ExternalLink>
-            </Text>
-          ) : null}
         </Column>
       </Card>
     </Column>
