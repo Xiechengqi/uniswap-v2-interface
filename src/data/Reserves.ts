@@ -85,6 +85,11 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
     }
 
     const fetchPairs = async () => {
+      console.debug('[pairs] start', {
+        chainId,
+        hasLibrary: Boolean(library),
+        tokenAddressPairs
+      })
       if (!library || tokenAddressPairs.length === 0) {
         if (!stale) setResults(tokenAddressPairs.map(() => ({ loading: false })))
         return
@@ -106,6 +111,7 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
       if (!stale) setResults(initial)
 
       const routerAddress = getRouterAddress(chainId ?? undefined)
+      console.debug('[pairs] router', { chainId, routerAddress })
 
       const pairAddresses = tokenAddressPairs.map(() => undefined as string | undefined)
 
@@ -117,6 +123,7 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
 
         const routerContract = new Contract(routerAddress, ROUTER_FACTORY_ABI, library)
         const factoryAddress = await routerContract.factory()
+        console.debug('[pairs] factory', { factoryAddress })
         if (!factoryAddress || factoryAddress === AddressZero) {
           if (!stale) setResults(tokenAddressPairs.map(() => ({ loading: false })))
           return
@@ -151,6 +158,7 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
             pairAddresses[index] = address
           }
         })
+        console.debug('[pairs] pairAddresses', { pairAddresses })
 
         const reservesResults = await asyncPool(
           pairAddresses,
@@ -179,6 +187,7 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
             }
           }
         )
+        console.debug('[pairs] reservesResults', { reservesResults })
 
         const nextResults = tokenAddressPairs.map<PairLookupResult>(([tokenA, tokenB], index) => {
           if (!tokenA || !tokenB || tokenA.toLowerCase() === tokenB.toLowerCase()) return { loading: false }
