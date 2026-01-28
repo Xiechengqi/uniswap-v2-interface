@@ -49,14 +49,14 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
     })
   }, [chainId, currencies])
 
-  const fallbackTokenAddressPairs = useMemo(() => {
+  const fallbackTokenAddressPairs = useMemo<ReadonlyArray<readonly [string, string]>>(() => {
     const tokenAddress = getTokenAddress(chainId ?? undefined)
     const wethAddress = getWethAddress(chainId ?? undefined)
     if (!tokenAddress || !wethAddress) return []
-    return [[wethAddress, tokenAddress]] as const
+    return [[wethAddress, tokenAddress]]
   }, [chainId])
 
-  const effectiveTokenAddressPairs = useMemo(() => {
+  const effectiveTokenAddressPairs = useMemo<ReadonlyArray<readonly [string, string]>>(() => {
     const hasValid = tokenAddressPairs.some(
       ([a, b]) => a && b && a.toLowerCase() !== b.toLowerCase()
     )
