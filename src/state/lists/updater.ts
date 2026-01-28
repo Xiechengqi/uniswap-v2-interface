@@ -9,6 +9,7 @@ import { addPopup } from '../application/actions'
 import { AppDispatch, AppState } from '../index'
 import { acceptListUpdate, fetchTokenList, selectList } from './actions'
 import { PRIVATE_CHAIN_LIST_URL } from '../../constants/lists'
+import PRIVATE_CHAIN_TOKEN_LIST from '../../constants/tokenLists/privateChain'
 import { Contract } from '@ethersproject/contracts'
 import ERC20_ABI from '../../constants/abis/erc20.json'
 import { getPrivateChainId, isPrivateChain } from '../../utils/switchNetwork'
@@ -37,9 +38,10 @@ export default function Updater(): null {
 
   const fetchAllListsCallback = useCallback(() => {
     if (!isWindowVisible) return
-    Object.keys(lists).forEach(url =>
+    Object.keys(lists).forEach(url => {
+      if (url === PRIVATE_CHAIN_LIST_URL) return
       fetchList(url).catch(error => console.debug('interval list fetching error', error))
-    )
+    })
   }, [fetchList, isWindowVisible, lists])
 
   // fetch all lists every 10 minutes, but only after we initialize library
@@ -48,6 +50,7 @@ export default function Updater(): null {
   // whenever a list is not loaded and not loading, try again to load it
   useEffect(() => {
     Object.keys(lists).forEach(listUrl => {
+      if (listUrl === PRIVATE_CHAIN_LIST_URL) return
       const list = lists[listUrl]
 
       if (!list.current && !list.loadingRequestId && !list.error) {
@@ -114,9 +117,6 @@ export default function Updater(): null {
   // fetch blockscout token list for private chain
   useEffect(() => {
     // Always attempt Blockscout sync for the configured private chain
-    const privateList = lists[PRIVATE_CHAIN_LIST_URL]?.current
-    if (!privateList) return
-
     let stale = false
     const effectiveChainId = privateChainId
     const baseUrl = getBlockscoutUrl(effectiveChainId).replace(/\/$/, '')
@@ -192,33 +192,22 @@ export default function Updater(): null {
       return null
     }
 
-    const mergeTokens = (blockscoutTokens: TokenInfo[], localTokens: TokenInfo[]) => {
-      const map = new Map<string, TokenInfo>()
-      blockscoutTokens.forEach(token => {
-        map.set(token.address.toLowerCase(), token)
-      })
-      localTokens.forEach(token => {
-        map.set(token.address.toLowerCase(), token)
-      })
-      return Array.from(map.values()).sort((a, b) => a.address.localeCompare(b.address))
-    }
-
     const updateList = async () => {
+      const baseList = lists[PRIVATE_CHAIN_LIST_URL]?.current ?? PRIVATE_CHAIN_TOKEN_LIST
       const cached = readCache()
       const blockscoutTokens = cached?.tokens || (await fetchFromEndpoints())
       if (!blockscoutTokens) return
 
       if (!cached) writeCache(blockscoutTokens)
-      const mergedTokens = mergeTokens(blockscoutTokens, privateList.tokens)
 
       if (stale) return
 
       const currentMap = new Map(
-        privateList.tokens.map(token => [token.address.toLowerCase(), token])
+        baseList.tokens.map(token => [token.address.toLowerCase(), token])
       )
       const hasChanges =
-        mergedTokens.length !== privateList.tokens.length ||
-        mergedTokens.some(token => {
+        blockscoutTokens.length !== baseList.tokens.length ||
+        blockscoutTokens.some(token => {
           const current = currentMap.get(token.address.toLowerCase())
           return (
             !current ||
@@ -231,12 +220,12 @@ export default function Updater(): null {
       if (!hasChanges) return
 
       const nextList: TokenList = {
-        ...privateList,
-        tokens: mergedTokens,
+        ...baseList,
+        tokens: blockscoutTokens,
         timestamp: new Date().toISOString(),
         version: {
-          ...privateList.version,
-          patch: privateList.version.patch + 1
+          ...baseList.version,
+          patch: baseList.version.patch + 1
         }
       }
 
