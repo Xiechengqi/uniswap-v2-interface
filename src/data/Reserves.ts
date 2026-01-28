@@ -85,12 +85,16 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
     }
 
     const fetchPairs = async () => {
+      const hasValidPair = tokenAddressPairs.some(
+        ([a, b]) => a && b && a.toLowerCase() !== b.toLowerCase()
+      )
       console.debug('[pairs] start', {
         chainId,
         hasLibrary: Boolean(library),
-        tokenAddressPairs
+        tokenAddressPairs,
+        hasValidPair
       })
-      if (!library || tokenAddressPairs.length === 0) {
+      if (!library || tokenAddressPairs.length === 0 || !hasValidPair) {
         if (!stale) setResults(tokenAddressPairs.map(() => ({ loading: false })))
         return
       }
