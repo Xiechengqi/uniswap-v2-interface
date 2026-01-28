@@ -96,7 +96,7 @@ export function useWETHAddress(): string | undefined {
     }
 
     fetchWETH()
-  }, [chainId, envWethAddress, library])
+  }, [chainId, configuredWethAddress, envWethAddress, library])
 
   // 返回优先级: 环境变量 > Router > SDK 默认
   if (envWethAddress) return envWethAddress
