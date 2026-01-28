@@ -81,14 +81,17 @@ function useSwapCallArguments(
         )
 
         if (trade.tradeType === TradeType.EXACT_INPUT) {
-          swapMethods.push(
-            Router.swapCallParameters(trade, {
-              feeOnTransfer: true,
-              allowedSlippage: new Percent(JSBI.BigInt(allowedSlippage), BIPS_BASE),
-              recipient,
-              ttl: deadline
-            })
-          )
+          const feeOnTransferParams = Router.swapCallParameters(trade, {
+            feeOnTransfer: true,
+            allowedSlippage: new Percent(JSBI.BigInt(allowedSlippage), BIPS_BASE),
+            recipient,
+            ttl: deadline
+          })
+          // Allow fee-on-transfer tokens to succeed by relaxing minOut
+          if (feeOnTransferParams?.args?.length && feeOnTransferParams.methodName?.includes('SupportingFeeOnTransferTokens')) {
+            feeOnTransferParams.args[0] = '0'
+          }
+          swapMethods.push(feeOnTransferParams)
         }
         break
       case Version.v1:
