@@ -140,7 +140,9 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
             if (cached && now - cached.updatedAt < PAIR_CACHE_TTL_MS) {
               return cached.address
             }
-            if (inflightRef.current.pairKey.has(pairKey)) return cached?.address
+            if (inflightRef.current.pairKey.has(pairKey) && cached?.address) {
+              return cached.address
+            }
             inflightRef.current.pairKey.add(pairKey)
             try {
               const address = await factoryContract.getPair(tokenA, tokenB)
@@ -170,7 +172,7 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
             if (cached && now - cached.updatedAt < RESERVES_CACHE_TTL_MS) {
               return cached
             }
-            if (inflightRef.current.reserves.has(normalized)) return cached
+            if (inflightRef.current.reserves.has(normalized) && cached) return cached
             inflightRef.current.reserves.add(normalized)
             try {
               const pairContract = new Contract(address, IUniswapV2PairABI, library)
@@ -182,6 +184,9 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
               }
               cacheRef.current.reservesByPair.set(normalized, stored)
               return stored
+            } catch (error) {
+              console.debug('[pairs] getReserves failed', { address, error })
+              return undefined
             } finally {
               inflightRef.current.reserves.delete(normalized)
             }
