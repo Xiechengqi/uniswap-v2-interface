@@ -140,12 +140,16 @@ class MiniRpcProvider implements AsyncSendable {
 export class NetworkConnector extends AbstractConnector {
   private readonly providers: { [chainId: number]: MiniRpcProvider }
   private currentChainId: number
+  private readonly url: string
+  private detectedChainId: number | null
 
   constructor({ urls, defaultChainId }: NetworkConnectorArguments) {
-    invariant(defaultChainId || Object.keys(urls).length === 1, 'defaultChainId is a required argument with >1 url')
     super({ supportedChainIds: Object.keys(urls).map((k): number => Number(k)) })
+    invariant(defaultChainId || Object.keys(urls).length === 1, 'defaultChainId is a required argument with >1 url')
+    this.detectedChainId = null
 
     this.currentChainId = defaultChainId || Number(Object.keys(urls)[0])
+    this.url = urls[this.currentChainId]
     this.providers = Object.keys(urls).reduce<{ [chainId: number]: MiniRpcProvider }>((accumulator, chainId) => {
       accumulator[Number(chainId)] = new MiniRpcProvider(Number(chainId), urls[Number(chainId)])
       return accumulator
@@ -153,19 +157,46 @@ export class NetworkConnector extends AbstractConnector {
   }
 
   public get provider(): MiniRpcProvider {
-    return this.providers[this.currentChainId]
+    // 如果检测到了真实 chainId，使用它；否则使用配置的
+    const chainId = this.detectedChainId || this.currentChainId
+    // 如果 provider 不存在，动态创建一个
+    if (!this.providers[chainId]) {
+      this.providers[chainId] = new MiniRpcProvider(chainId, this.url)
+    }
+    return this.providers[chainId]
   }
 
   public async activate(): Promise<ConnectorUpdate> {
-    return { provider: this.providers[this.currentChainId], chainId: this.currentChainId, account: null }
+    // 从 RPC 自动获取 chainId
+    try {
+      const response = await fetch(this.url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_chainId', params: [] })
+      })
+      const json = await response.json()
+      if (json.result) {
+        this.detectedChainId = parseInt(json.result, 16)
+        console.debug('Auto-detected chainId from RPC:', this.detectedChainId)
+        // 为检测到的 chainId 创建 provider
+        if (!this.providers[this.detectedChainId]) {
+          this.providers[this.detectedChainId] = new MiniRpcProvider(this.detectedChainId, this.url)
+        }
+      }
+    } catch (error) {
+      console.debug('Failed to auto-detect chainId, using configured:', this.currentChainId, error)
+    }
+
+    const chainId = this.detectedChainId || this.currentChainId
+    return { provider: this.providers[chainId] || this.providers[this.currentChainId], chainId, account: null }
   }
 
   public async getProvider(): Promise<MiniRpcProvider> {
-    return this.providers[this.currentChainId]
+    return this.provider
   }
 
   public async getChainId(): Promise<number> {
-    return this.currentChainId
+    return this.detectedChainId || this.currentChainId
   }
 
   public async getAccount(): Promise<null> {

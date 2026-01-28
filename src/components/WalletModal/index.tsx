@@ -18,6 +18,7 @@ import { injected, fortmatic, portis } from '../../connectors'
 import { OVERLAY_READY } from '../../connectors/Fortmatic'
 import { WalletConnectConnector } from '@web3-react/walletconnect-connector'
 import { AbstractConnector } from '@web3-react/abstract-connector'
+import { getPrivateChainId, isPrivateChain } from '../../utils/switchNetwork'
 
 const CloseIcon = styled.div`
   position: absolute;
@@ -125,7 +126,8 @@ export default function WalletModal({
   ENSName?: string
 }) {
   // important that these are destructed from the account-specific web3-react context
-  const { active, account, connector, activate, error } = useWeb3React()
+  const { active, account, connector, activate, error, chainId } = useWeb3React()
+  const isPrivate = isPrivateChain(chainId ?? getPrivateChainId())
 
   const [walletView, setWalletView] = useState(WALLET_VIEWS.ACCOUNT)
 
@@ -204,7 +206,8 @@ export default function WalletModal({
   // get wallets user can switch too, depending on device/browser
   function getOptions() {
     const isMetamask = window.ethereum && window.ethereum.isMetaMask
-    return Object.keys(SUPPORTED_WALLETS).map(key => {
+    const allowedWalletKeys = isPrivate ? ['INJECTED', 'WALLET_CONNECT'] : Object.keys(SUPPORTED_WALLETS)
+    return allowedWalletKeys.map(key => {
       const option = SUPPORTED_WALLETS[key]
       // check for mobile options
       if (isMobile) {

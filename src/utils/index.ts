@@ -25,8 +25,27 @@ const ETHERSCAN_PREFIXES: { [chainId in ChainId]: string } = {
   42: 'kovan.'
 }
 
-export function getEtherscanLink(chainId: ChainId, data: string, type: 'transaction' | 'token' | 'address'): string {
-  const prefix = `https://${ETHERSCAN_PREFIXES[chainId] || ETHERSCAN_PREFIXES[1]}etherscan.io`
+// Custom block explorer URL from env (for private chains like Blockscout)
+const CUSTOM_BLOCK_EXPLORER_URL = process.env.REACT_APP_BLOCK_EXPLORER_URL || ''
+const CUSTOM_CHAIN_ID = parseInt(process.env.REACT_APP_CHAIN_ID ?? '1')
+
+export function getEtherscanLink(chainId: ChainId | number, data: string, type: 'transaction' | 'token' | 'address'): string {
+  // Use custom block explorer for private chain
+  if (CUSTOM_BLOCK_EXPLORER_URL && chainId === CUSTOM_CHAIN_ID) {
+    const baseUrl = CUSTOM_BLOCK_EXPLORER_URL.replace(/\/$/, '')
+    switch (type) {
+      case 'transaction':
+        return `${baseUrl}/tx/${data}`
+      case 'token':
+        return `${baseUrl}/token/${data}`
+      case 'address':
+      default:
+        return `${baseUrl}/address/${data}`
+    }
+  }
+
+  // Fallback to Etherscan for standard chains
+  const prefix = `https://${ETHERSCAN_PREFIXES[chainId as ChainId] || ETHERSCAN_PREFIXES[1]}etherscan.io`
 
   switch (type) {
     case 'transaction': {

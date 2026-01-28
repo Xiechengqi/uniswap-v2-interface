@@ -25,7 +25,11 @@ export class WrappedTokenInfo extends Token {
   }
 }
 
-export type TokenAddressMap = Readonly<{ [chainId in ChainId]: Readonly<{ [tokenAddress: string]: WrappedTokenInfo }> }>
+// 支持任意 chainId 的 token 映射
+export type TokenAddressMap = Readonly<{ [chainId: number]: Readonly<{ [tokenAddress: string]: WrappedTokenInfo }> }>
+
+// 自定义 chainId (从环境变量读取)
+const CUSTOM_CHAIN_ID = parseInt(process.env.REACT_APP_CHAIN_ID || '1', 10)
 
 /**
  * An empty result, useful as a default.
@@ -35,7 +39,8 @@ const EMPTY_LIST: TokenAddressMap = {
   [ChainId.RINKEBY]: {},
   [ChainId.ROPSTEN]: {},
   [ChainId.GÖRLI]: {},
-  [ChainId.MAINNET]: {}
+  [ChainId.MAINNET]: {},
+  [CUSTOM_CHAIN_ID]: {}
 }
 
 const listCache: WeakMap<TokenList, TokenAddressMap> | null =
@@ -55,11 +60,12 @@ export function listToTokenMap(list: TokenList): TokenAddressMap {
           })
           ?.filter((x): x is TagInfo => Boolean(x)) ?? []
       const token = new WrappedTokenInfo(tokenInfo, tags)
-      if (tokenMap[token.chainId][token.address] !== undefined) throw Error('Duplicate tokens.')
+      const chainTokens = tokenMap[token.chainId] || {}
+      if (chainTokens[token.address] !== undefined) throw Error('Duplicate tokens.')
       return {
         ...tokenMap,
         [token.chainId]: {
-          ...tokenMap[token.chainId],
+          ...chainTokens,
           [token.address]: token
         }
       }

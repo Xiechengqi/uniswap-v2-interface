@@ -1,4 +1,5 @@
 import { Contract } from '@ethersproject/contracts'
+import { Web3Provider } from '@ethersproject/providers'
 import { useEffect, useMemo, useRef } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useActiveWeb3React } from '../../hooks'
@@ -18,6 +19,8 @@ import {
 
 // chunk calls so we do not exceed the gas limit
 const CALL_CHUNK_SIZE = 500
+// smaller chunk size for individual calls (no Multicall fallback)
+const INDIVIDUAL_CALL_CHUNK_SIZE = 50
 
 /**
  * Fetches a chunk of calls, enforcing a minimum block number constraint
@@ -43,6 +46,40 @@ async function fetchChunk(
     throw new RetryableError('Fetched for old block number')
   }
   return { results: returnData, blockNumber: resultsBlockNumber.toNumber() }
+}
+
+/**
+ * Fallback: Fetches calls individually using eth_call when Multicall is not available
+ * @param provider Web3Provider to make calls
+ * @param chunk chunk of calls to make
+ * @param blockNumber block number to fetch at
+ */
+async function fetchChunkWithoutMulticall(
+  provider: Web3Provider,
+  chunk: Call[],
+  blockNumber: number
+): Promise<{ results: string[]; blockNumber: number }> {
+  console.debug('Fetching chunk without Multicall (individual calls)', chunk.length, 'calls')
+
+  const results = await Promise.all(
+    chunk.map(async (call) => {
+      try {
+        const result = await provider.call(
+          {
+            to: call.address,
+            data: call.callData
+          },
+          blockNumber
+        )
+        return result
+      } catch (error) {
+        console.debug('Individual call failed', call.address, error)
+        return '0x'
+      }
+    })
+  )
+
+  return { results, blockNumber }
 }
 
 /**
@@ -116,9 +153,12 @@ export default function Updater(): null {
   // wait for listeners to settle before triggering updates
   const debouncedListeners = useDebounce(state.callListeners, 100)
   const latestBlockNumber = useBlockNumber()
-  const { chainId } = useActiveWeb3React()
+  const { chainId, library } = useActiveWeb3React()
   const multicallContract = useMulticallContract()
   const cancellations = useRef<{ blockNumber: number; cancellations: (() => void)[] }>()
+
+  // Check if we should use fallback mode (no Multicall contract)
+  const useFallback = !multicallContract && !!library
 
   const listeningKeys: { [callKey: string]: number } = useMemo(() => {
     return activeListeningKeys(debouncedListeners, chainId)
@@ -133,13 +173,16 @@ export default function Updater(): null {
   ])
 
   useEffect(() => {
-    if (!latestBlockNumber || !chainId || !multicallContract) return
+    // Need either multicallContract OR library for fallback
+    if (!latestBlockNumber || !chainId || (!multicallContract && !library)) return
 
     const outdatedCallKeys: string[] = JSON.parse(serializedOutdatedCallKeys)
     if (outdatedCallKeys.length === 0) return
     const calls = outdatedCallKeys.map(key => parseCallKey(key))
 
-    const chunkedCalls = chunkArray(calls, CALL_CHUNK_SIZE)
+    // Use smaller chunk size for individual calls (fallback mode)
+    const chunkSize = useFallback ? INDIVIDUAL_CALL_CHUNK_SIZE : CALL_CHUNK_SIZE
+    const chunkedCalls = chunkArray(calls, chunkSize)
 
     if (cancellations.current?.blockNumber !== latestBlockNumber) {
       cancellations.current?.cancellations?.forEach(c => c())
@@ -156,10 +199,15 @@ export default function Updater(): null {
     cancellations.current = {
       blockNumber: latestBlockNumber,
       cancellations: chunkedCalls.map((chunk, index) => {
-        const { cancel, promise } = retry(() => fetchChunk(multicallContract, chunk, latestBlockNumber), {
-          n: Infinity,
-          minWait: 2500,
-          maxWait: 3500
+        // Choose fetch method based on Multicall availability
+        const fetchMethod = useFallback
+          ? () => fetchChunkWithoutMulticall(library!, chunk, latestBlockNumber)
+          : () => fetchChunk(multicallContract!, chunk, latestBlockNumber)
+
+        const { cancel, promise } = retry(fetchMethod, {
+          n: useFallback ? 3 : Infinity, // Fewer retries for fallback mode
+          minWait: useFallback ? 1000 : 2500,
+          maxWait: useFallback ? 2000 : 3500
         })
         promise
           .then(({ results: returnData, blockNumber: fetchBlockNumber }) => {
@@ -199,7 +247,7 @@ export default function Updater(): null {
         return cancel
       })
     }
-  }, [chainId, multicallContract, dispatch, serializedOutdatedCallKeys, latestBlockNumber])
+  }, [chainId, multicallContract, library, useFallback, dispatch, serializedOutdatedCallKeys, latestBlockNumber])
 
   return null
 }

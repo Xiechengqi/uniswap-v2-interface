@@ -4,7 +4,7 @@ import styled from 'styled-components'
 import { useTranslation } from 'react-i18next'
 
 import { network } from '../../connectors'
-import { useEagerConnect, useInactiveListener } from '../../hooks'
+import { useEagerConnect, useInactiveListener, useAutoSwitchNetwork } from '../../hooks'
 import { NetworkContextName } from '../../constants'
 import Loader from '../Loader'
 
@@ -26,6 +26,9 @@ export default function Web3ReactManager({ children }: { children: JSX.Element }
 
   // try to eagerly connect to an injected provider, if it exists and has granted access already
   const triedEager = useEagerConnect()
+
+  // 自动切换到私有链
+  useAutoSwitchNetwork()
 
   // after eagerly trying injected, if the network connect ever isn't active or in an error state, activate itd
   useEffect(() => {

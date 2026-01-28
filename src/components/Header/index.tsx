@@ -20,6 +20,7 @@ import Menu from '../Menu'
 import Row, { RowBetween } from '../Row'
 import Web3Status from '../Web3Status'
 import VersionSwitch from './VersionSwitch'
+import { getPrivateChainId, isPrivateChain } from '../../utils/switchNetwork'
 
 const HeaderFrame = styled.div`
   display: flex;
@@ -136,6 +137,7 @@ const NETWORK_LABELS: { [chainId in ChainId]: string | null } = {
 
 export default function Header() {
   const { account, chainId } = useActiveWeb3React()
+  const isPrivate = isPrivateChain(chainId ?? getPrivateChainId())
 
   const userEthBalance = useETHBalances(account ? [account] : [])?.[account ?? '']
   const [isDark] = useDarkModeManager()
@@ -168,7 +170,7 @@ export default function Header() {
             </AccountElement>
           </HeaderElement>
           <HeaderElementWrap>
-            <VersionSwitch />
+            {!isPrivate && <VersionSwitch />}
             <Settings />
             <Menu />
           </HeaderElementWrap>

@@ -1,10 +1,11 @@
 import { createReducer } from '@reduxjs/toolkit'
 import { getVersionUpgrade, VersionUpgrade } from '@uniswap/token-lists'
 import { TokenList } from '@uniswap/token-lists/dist/types'
-import { DEFAULT_LIST_OF_LISTS, DEFAULT_TOKEN_LIST_URL } from '../../constants/lists'
+import { DEFAULT_LIST_OF_LISTS, DEFAULT_TOKEN_LIST_URL, PRIVATE_CHAIN_LIST_URL } from '../../constants/lists'
 import { updateVersion } from '../global/actions'
 import { acceptListUpdate, addList, fetchTokenList, removeList, selectList } from './actions'
 import UNISWAP_DEFAULT_LIST from '@uniswap/default-token-list'
+import PRIVATE_CHAIN_TOKEN_LIST from '../../constants/tokenLists/privateChain'
 
 export interface ListsState {
   readonly byUrl: {
@@ -41,9 +42,15 @@ const initialState: ListsState = {
       current: UNISWAP_DEFAULT_LIST,
       loadingRequestId: null,
       pendingUpdate: null
+    },
+    [PRIVATE_CHAIN_LIST_URL]: {
+      error: null,
+      current: PRIVATE_CHAIN_TOKEN_LIST,
+      loadingRequestId: null,
+      pendingUpdate: null
     }
   },
-  selectedListUrl: undefined
+  selectedListUrl: PRIVATE_CHAIN_LIST_URL
 }
 
 export default createReducer(initialState, builder =>
@@ -152,6 +159,19 @@ export default createReducer(initialState, builder =>
           }
         })
       }
+
+      // 确保私有链 token list 存在
+      if (!state.byUrl[PRIVATE_CHAIN_LIST_URL]) {
+        state.byUrl[PRIVATE_CHAIN_LIST_URL] = {
+          error: null,
+          current: PRIVATE_CHAIN_TOKEN_LIST,
+          loadingRequestId: null,
+          pendingUpdate: null
+        }
+      }
+
+      // 强制选择私有链 token list
+      state.selectedListUrl = PRIVATE_CHAIN_LIST_URL
 
       state.lastInitializedDefaultListOfLists = DEFAULT_LIST_OF_LISTS
     })

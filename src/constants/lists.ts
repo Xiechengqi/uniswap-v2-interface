@@ -1,8 +1,12 @@
 // the Uniswap Default token list lives here
 export const DEFAULT_TOKEN_LIST_URL = 'tokens.uniswap.eth'
 
+// 私有链 token list (本地)
+export const PRIVATE_CHAIN_LIST_URL = 'private-chain-tokens'
+
 export const DEFAULT_LIST_OF_LISTS: string[] = [
   DEFAULT_TOKEN_LIST_URL,
+  PRIVATE_CHAIN_LIST_URL,
   't2crtokens.eth', // kleros
   'tokens.1inch.eth', // 1inch
   'synths.snx.eth',

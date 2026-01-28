@@ -1,4 +1,4 @@
-import React, { useRef, useContext, useState } from 'react'
+import React, { useRef, useContext, useMemo, useState } from 'react'
 import { Settings, X } from 'react-feather'
 import styled from 'styled-components'
 import { useOnClickOutside } from '../../hooks/useOnClickOutside'
@@ -15,10 +15,25 @@ import QuestionHelper from '../QuestionHelper'
 import Toggle from '../Toggle'
 import { ThemeContext } from 'styled-components'
 import { AutoColumn } from '../Column'
-import { ButtonError } from '../Button'
+import { ButtonError, ButtonPrimary } from '../Button'
 import { useSettingsMenuOpen, useToggleSettingsMenu } from '../../state/application/hooks'
 import { Text } from 'rebass'
 import Modal from '../Modal'
+import {
+  clearConfigFromStorage,
+  getChainId,
+  getConfigFromStorage,
+  getEnvRpcUrl,
+  getEnvRouterAddress,
+  getEnvTokenAddress,
+  getRpcUrl,
+  getRouterAddress,
+  getTokenAddress,
+  saveConfigToStorage
+} from '../../utils/appConfig'
+import { isAddress } from '../../utils'
+import { JsonRpcProvider } from '@ethersproject/providers'
+import { Contract } from '@ethersproject/contracts'
 
 const StyledMenuIcon = styled(Settings)`
   height: 20px;
@@ -121,6 +136,29 @@ const ModalContentWrapper = styled.div`
   border-radius: 20px;
 `
 
+const ConfigInput = styled.input`
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 12px;
+  border: 1px solid ${({ theme }) => theme.bg3};
+  background: ${({ theme }) => theme.bg2};
+  color: ${({ theme }) => theme.text1};
+
+  :focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.primary1};
+  }
+`
+
+const ConfigRow = styled(AutoColumn)`
+  gap: 8px;
+`
+
+const ConfigActions = styled.div`
+  display: flex;
+  gap: 0.5rem;
+`
+
 export default function SettingsTab() {
   const node = useRef<HTMLDivElement>()
   const open = useSettingsMenuOpen()
@@ -135,10 +173,103 @@ export default function SettingsTab() {
 
   const [darkMode, toggleDarkMode] = useDarkModeManager()
 
+  const chainId = getChainId()
+  const storedConfig = useMemo(() => getConfigFromStorage(chainId), [chainId])
+  const [rpcUrl, setRpcUrl] = useState<string>(storedConfig?.rpcUrl || getRpcUrl(chainId))
+  const [routerAddress, setRouterAddress] = useState<string>(
+    storedConfig?.routerAddress || getRouterAddress(chainId)
+  )
+  const [tokenAddress, setTokenAddress] = useState<string>(
+    storedConfig?.tokenAddress || getTokenAddress(chainId)
+  )
+  const [tokenRequired, setTokenRequired] = useState<boolean>(
+    storedConfig?.tokenRequired ?? Boolean(storedConfig?.tokenAddress || getEnvTokenAddress())
+  )
+  const [configError, setConfigError] = useState<string | null>(null)
+  const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const [testMessage, setTestMessage] = useState<string | null>(null)
+  const [isTesting, setIsTesting] = useState(false)
+
   // show confirmation view before turning on
   const [showConfirmation, setShowConfirmation] = useState(false)
 
   useOnClickOutside(node, open ? toggle : undefined)
+
+  const validateConfig = () => {
+    if (!rpcUrl) return 'RPC URL is required.'
+    try {
+      // eslint-disable-next-line no-new
+      new URL(rpcUrl)
+    } catch {
+      return 'RPC URL is invalid.'
+    }
+    if (!routerAddress || !isAddress(routerAddress)) return 'Router address is invalid.'
+    if (tokenRequired && !tokenAddress) return 'Token address is required.'
+    if (tokenAddress && !isAddress(tokenAddress)) return 'Token address is invalid.'
+    return null
+  }
+
+  const handleSaveConfig = () => {
+    const error = validateConfig()
+    setConfigError(error)
+    if (error) return
+    saveConfigToStorage(chainId, { rpcUrl, routerAddress, tokenAddress, tokenRequired })
+    setSaveMessage('Saved. Refreshing...')
+    setTimeout(() => window.location.reload(), 300)
+  }
+
+  const handleTestConnection = async () => {
+    const error = validateConfig()
+    setConfigError(error)
+    if (error) return
+
+    setIsTesting(true)
+    setTestMessage(null)
+    try {
+      const response = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_chainId', params: [] })
+      })
+      const json = await response.json()
+      if (!json?.result) {
+        setTestMessage('RPC test failed: no chainId returned.')
+        setIsTesting(false)
+        return
+      }
+      const rpcChainId = parseInt(String(json.result), 16)
+      if (Number.isNaN(rpcChainId)) {
+        setTestMessage('RPC test failed: invalid chainId.')
+        setIsTesting(false)
+        return
+      }
+      if (rpcChainId !== chainId) {
+        setTestMessage(`ChainId mismatch: RPC=${rpcChainId}, expected=${chainId}.`)
+        setIsTesting(false)
+        return
+      }
+
+      const provider = new JsonRpcProvider(rpcUrl)
+      const router = new Contract(routerAddress, ['function WETH() view returns (address)'], provider)
+      await router.WETH()
+      setTestMessage('Connection OK.')
+    } catch (error) {
+      setTestMessage('Connection failed.')
+    } finally {
+      setIsTesting(false)
+    }
+  }
+
+  const handleResetConfig = () => {
+    clearConfigFromStorage(chainId)
+    setRpcUrl(getEnvRpcUrl())
+    setRouterAddress(getEnvRouterAddress())
+    setTokenAddress(getEnvTokenAddress())
+    setTokenRequired(Boolean(getEnvTokenAddress()))
+    setConfigError(null)
+    setSaveMessage('Reset to defaults. Refreshing...')
+    setTimeout(() => window.location.reload(), 300)
+  }
 
   return (
     // https://github.com/DefinitelyTyped/DefinitelyTyped/issues/30451
@@ -236,6 +367,99 @@ export default function SettingsTab() {
               </RowFixed>
               <Toggle isActive={darkMode} toggle={toggleDarkMode} />
             </RowBetween>
+            <Text fontWeight={600} fontSize={14}>
+              Private Chain Config
+            </Text>
+            <ConfigRow>
+              <TYPE.black fontWeight={400} fontSize={12} color={theme.text2}>
+                RPC URL
+              </TYPE.black>
+              <ConfigInput
+                value={rpcUrl}
+                onChange={event => {
+                  setRpcUrl(event.target.value)
+                  setConfigError(null)
+                  setSaveMessage(null)
+                  setTestMessage(null)
+                }}
+                placeholder="https://..."
+              />
+            </ConfigRow>
+            <ConfigRow>
+              <TYPE.black fontWeight={400} fontSize={12} color={theme.text2}>
+                Router Address
+              </TYPE.black>
+              <ConfigInput
+                value={routerAddress}
+                onChange={event => {
+                  setRouterAddress(event.target.value)
+                  setConfigError(null)
+                  setSaveMessage(null)
+                  setTestMessage(null)
+                }}
+                placeholder="0x..."
+              />
+            </ConfigRow>
+            <ConfigRow>
+              <TYPE.black fontWeight={400} fontSize={12} color={theme.text2}>
+                Token Address
+              </TYPE.black>
+              <ConfigInput
+                value={tokenAddress}
+                onChange={event => {
+                  setTokenAddress(event.target.value)
+                  setConfigError(null)
+                  setSaveMessage(null)
+                  setTestMessage(null)
+                }}
+                placeholder="0x..."
+              />
+            </ConfigRow>
+            <RowBetween>
+              <RowFixed>
+                <TYPE.black fontWeight={400} fontSize={14} color={theme.text2}>
+                  Require Token Address
+                </TYPE.black>
+              </RowFixed>
+              <Toggle
+                isActive={tokenRequired}
+                toggle={() => {
+                  setTokenRequired(!tokenRequired)
+                  setConfigError(null)
+                  setSaveMessage(null)
+                  setTestMessage(null)
+                }}
+              />
+            </RowBetween>
+            <ConfigActions>
+              <ButtonPrimary
+                padding="8px 12px"
+                onClick={handleSaveConfig}
+              >
+                Save
+              </ButtonPrimary>
+              <ButtonPrimary padding="8px 12px" onClick={handleTestConnection} disabled={isTesting}>
+                {isTesting ? 'Testing...' : 'Test'}
+              </ButtonPrimary>
+              <ButtonError error={false} padding="8px 12px" onClick={handleResetConfig}>
+                Reset
+              </ButtonError>
+            </ConfigActions>
+            {configError && (
+              <TYPE.black fontWeight={400} fontSize={12} color={theme.red1}>
+                {configError}
+              </TYPE.black>
+            )}
+            {saveMessage && (
+              <TYPE.black fontWeight={400} fontSize={12} color={theme.text2}>
+                {saveMessage}
+              </TYPE.black>
+            )}
+            {testMessage && (
+              <TYPE.black fontWeight={400} fontSize={12} color={theme.text2}>
+                {testMessage}
+              </TYPE.black>
+            )}
           </AutoColumn>
         </MenuFlyout>
       )}

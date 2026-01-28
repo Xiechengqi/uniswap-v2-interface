@@ -16,6 +16,8 @@ export function useAllTokens(): { [address: string]: Token } {
 
   return useMemo(() => {
     if (!chainId) return {}
+    // 安全获取当前链的 token，如果不存在则返回空对象
+    const chainTokens = allTokens[chainId] || {}
     return (
       userAddedTokens
         // reduce into all ALL_TOKENS filtered by the current chain
@@ -26,7 +28,7 @@ export function useAllTokens(): { [address: string]: Token } {
           },
           // must make a copy because reduce modifies the map, and we do not
           // want to make a copy in every iteration
-          { ...allTokens[chainId] }
+          { ...chainTokens }
         )
     )
   }, [chainId, userAddedTokens, allTokens])

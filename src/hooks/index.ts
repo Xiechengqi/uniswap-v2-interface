@@ -2,15 +2,25 @@ import { Web3Provider } from '@ethersproject/providers'
 import { ChainId } from '@im33357/uniswap-v2-sdk'
 import { useWeb3React as useWeb3ReactCore } from '@web3-react/core'
 import { Web3ReactContextInterface } from '@web3-react/core/dist/types'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { isMobile } from 'react-device-detect'
 import { injected } from '../connectors'
 import { NetworkContextName } from '../constants'
+import { switchToPrivateChain, isPrivateChain } from '../utils/switchNetwork'
 
+// Returns chainId typed as ChainId for SDK compatibility
+// Custom chains (like 84531) are cast to ChainId.MAINNET for type checking
+// but the actual chainId value is preserved for all operations
 export function useActiveWeb3React(): Web3ReactContextInterface<Web3Provider> & { chainId?: ChainId } {
   const context = useWeb3ReactCore<Web3Provider>()
   const contextNetwork = useWeb3ReactCore<Web3Provider>(NetworkContextName)
-  return context.active ? context : contextNetwork
+  const result = context.active ? context : contextNetwork
+
+  // Cast chainId to ChainId type (actual value preserved, type is for SDK compatibility)
+  return {
+    ...result,
+    chainId: result.chainId as ChainId | undefined
+  }
 }
 
 export function useEagerConnect() {
@@ -84,4 +94,38 @@ export function useInactiveListener(suppress = false) {
     }
     return undefined
   }, [active, error, suppress, activate])
+}
+
+/**
+ * 自动切换到私有链
+ * 当钱包连接但不在私有链时，自动提示切换
+ */
+export function useAutoSwitchNetwork() {
+  const { active, chainId } = useWeb3ReactCore()
+  const [switching, setSwitching] = useState(false)
+  const [switched, setSwitched] = useState(false)
+
+  const switchNetwork = useCallback(async () => {
+    if (switching || switched) return
+    setSwitching(true)
+    const success = await switchToPrivateChain()
+    setSwitching(false)
+    if (success) {
+      setSwitched(true)
+    }
+  }, [switching, switched])
+
+  useEffect(() => {
+    if (active && chainId && !isPrivateChain(chainId) && !switching && !switched) {
+      switchNetwork()
+    }
+  }, [active, chainId, switching, switched, switchNetwork])
+
+  useEffect(() => {
+    if (isPrivateChain(chainId)) {
+      setSwitched(true)
+    }
+  }, [chainId])
+
+  return { switching, switched }
 }

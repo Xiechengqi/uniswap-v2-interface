@@ -1,19 +1,23 @@
 import { Currency, CurrencyAmount, ETHER, JSBI, Token, TokenAmount } from '@im33357/uniswap-v2-sdk'
-import { useMemo } from 'react'
+import { useMemo, useEffect, useState } from 'react'
 import ERC20_INTERFACE from '../../constants/abis/erc20'
 import { useAllTokens } from '../../hooks/Tokens'
 import { useActiveWeb3React } from '../../hooks'
 import { useMulticallContract } from '../../hooks/useContract'
 import { isAddress } from '../../utils'
 import { useSingleContractMultipleData, useMultipleContractSingleData } from '../multicall/hooks'
+import { useBlockNumber } from '../application/hooks'
 
 /**
  * Returns a map of the given addresses to their eventually consistent ETH balances.
+ * Supports fallback to direct provider.getBalance() when Multicall is not available.
  */
 export function useETHBalances(
   uncheckedAddresses?: (string | undefined)[]
 ): { [address: string]: CurrencyAmount | undefined } {
+  const { library } = useActiveWeb3React()
   const multicallContract = useMulticallContract()
+  const blockNumber = useBlockNumber()
 
   const addresses: string[] = useMemo(
     () =>
@@ -26,21 +30,48 @@ export function useETHBalances(
     [uncheckedAddresses]
   )
 
+  // Multicall 方式获取余额
   const results = useSingleContractMultipleData(
     multicallContract,
     'getEthBalance',
     addresses.map(address => [address])
   )
 
-  return useMemo(
-    () =>
-      addresses.reduce<{ [address: string]: CurrencyAmount }>((memo, address, i) => {
+  // Fallback: 直接使用 provider.getBalance() (当没有 Multicall 时)
+  const [fallbackBalances, setFallbackBalances] = useState<{ [address: string]: CurrencyAmount }>({})
+
+  useEffect(() => {
+    // 如果有 Multicall 合约，不需要 fallback
+    if (multicallContract || !library || addresses.length === 0) return
+
+    const fetchBalances = async () => {
+      const balances: { [address: string]: CurrencyAmount } = {}
+      for (const address of addresses) {
+        try {
+          const balance = await library.getBalance(address)
+          balances[address] = CurrencyAmount.ether(JSBI.BigInt(balance.toString()))
+        } catch (error) {
+          console.debug('Failed to fetch ETH balance for', address, error)
+        }
+      }
+      setFallbackBalances(balances)
+    }
+
+    fetchBalances()
+  }, [multicallContract, library, addresses, blockNumber])
+
+  return useMemo(() => {
+    // 如果有 Multicall，使用 Multicall 结果
+    if (multicallContract) {
+      return addresses.reduce<{ [address: string]: CurrencyAmount }>((memo, address, i) => {
         const value = results?.[i]?.result?.[0]
         if (value) memo[address] = CurrencyAmount.ether(JSBI.BigInt(value.toString()))
         return memo
-      }, {}),
-    [addresses, results]
-  )
+      }, {})
+    }
+    // 否则使用 fallback 结果
+    return fallbackBalances
+  }, [multicallContract, addresses, results, fallbackBalances])
 }
 
 /**

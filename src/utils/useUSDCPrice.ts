@@ -4,6 +4,7 @@ import { USDC } from '../constants'
 import { PairState, usePairs } from '../data/Reserves'
 import { useActiveWeb3React } from '../hooks'
 import { wrappedCurrency } from './wrappedCurrency'
+import { isPrivateChain } from './switchNetwork'
 
 /**
  * Returns the price in USDC of the input currency
@@ -11,22 +12,23 @@ import { wrappedCurrency } from './wrappedCurrency'
  */
 export default function useUSDCPrice(currency?: Currency): Price | undefined {
   const { chainId } = useActiveWeb3React()
+  const isPrivate = isPrivateChain(chainId)
   const wrapped = wrappedCurrency(currency, chainId)
-  const tokenPairs: [Currency | undefined, Currency | undefined][] = useMemo(
-    () => [
-      [
-        chainId && wrapped && currencyEquals(WETH[chainId], wrapped) ? undefined : currency,
-        chainId ? WETH[chainId] : undefined
-      ],
+  const tokenPairs: [Currency | undefined, Currency | undefined][] = useMemo(() => {
+    if (!chainId || isPrivate) {
+      return []
+    }
+
+    return [
+      [wrapped && currencyEquals(WETH[chainId], wrapped) ? undefined : currency, WETH[chainId]],
       [wrapped?.equals(USDC) ? undefined : wrapped, chainId === ChainId.MAINNET ? USDC : undefined],
-      [chainId ? WETH[chainId] : undefined, chainId === ChainId.MAINNET ? USDC : undefined]
-    ],
-    [chainId, currency, wrapped]
-  )
+      [WETH[chainId], chainId === ChainId.MAINNET ? USDC : undefined]
+    ]
+  }, [chainId, currency, isPrivate, wrapped])
   const [[ethPairState, ethPair], [usdcPairState, usdcPair], [usdcEthPairState, usdcEthPair]] = usePairs(tokenPairs)
 
   return useMemo(() => {
-    if (!currency || !wrapped || !chainId) {
+    if (!currency || !wrapped || !chainId || isPrivate) {
       return undefined
     }
     // handle weth/eth

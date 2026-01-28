@@ -3,8 +3,34 @@ import { AbstractConnector } from '@web3-react/abstract-connector'
 import { DeploymentInfo } from '@im33357/uniswap-v2-sdk'
 
 import { fortmatic, injected, portis, walletconnect, walletlink } from '../connectors'
+import { getRouterAddress, getTokenAddress } from '../utils/appConfig'
 
-export const ROUTER_ADDRESS = DeploymentInfo[4].router.proxyAddress;
+// ============================================
+// 私有链配置 (从环境变量读取)
+// ============================================
+
+// Router 地址 (localStorage > 环境变量 > SDK 默认)
+export const ROUTER_ADDRESS = getRouterAddress() || DeploymentInfo[4].router.proxyAddress
+
+// Token 地址 (localStorage > 环境变量)
+const TOKEN_ADDRESS_BASE = getTokenAddress()
+
+// 自定义 Token 工厂函数 (支持动态 chainId)
+export function getCustomToken(chainId: number): Token | null {
+  if (!TOKEN_ADDRESS_BASE) return null
+  return new Token(chainId, TOKEN_ADDRESS_BASE, 4, 'MTK', 'MyToken')
+}
+
+// 兼容旧代码 (使用 MAINNET chainId)
+export const CUSTOM_TOKEN = getCustomToken(ChainId.MAINNET)
+
+// 链信息
+export const CHAIN_NAME = process.env.REACT_APP_CHAIN_NAME || 'Base Local'
+export const NATIVE_SYMBOL = process.env.REACT_APP_NATIVE_SYMBOL || 'ETH'
+export const NATIVE_NAME = process.env.REACT_APP_NATIVE_NAME || 'Ether'
+
+// Multicall 地址
+export const MULTICALL_ADDRESS = process.env.REACT_APP_MULTICALL_ADDRESS || ''
 
 // a list of tokens by chain
 type ChainTokenList = {
