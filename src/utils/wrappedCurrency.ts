@@ -4,6 +4,14 @@ import { getWethAddress } from './appConfig'
 // 环境变量配置的 WETH 地址
 const ENV_WETH_ADDRESS = process.env.REACT_APP_WETH_ADDRESS || ''
 
+function ensureSdkWeth(chainId: number, address: string): Token {
+  const existing = (WETH as Record<number, Token | undefined>)[chainId]
+  if (existing && existing.address.toLowerCase() === address.toLowerCase()) return existing
+  const token = new Token(chainId, address, 18, 'WETH', 'Wrapped Ether')
+  ;(WETH as Record<number, Token | undefined>)[chainId] = token
+  return token
+}
+
 function getConfiguredWethAddress(chainId: number | undefined): string {
   if (!chainId) return ''
   return getWethAddress(chainId) || ENV_WETH_ADDRESS || ''
@@ -28,12 +36,12 @@ export function getWETH(chainId: number | undefined): Token | undefined {
   // 优先使用配置的 WETH
   const configuredWethAddress = getConfiguredWethAddress(chainId)
   if (configuredWethAddress) {
-    return new Token(chainId, configuredWethAddress, 18, 'WETH', 'Wrapped Ether')
+    return ensureSdkWeth(chainId, configuredWethAddress)
   }
 
   const cachedWeth = getCachedWethAddress(chainId)
   if (cachedWeth) {
-    return new Token(chainId, cachedWeth, 18, 'WETH', 'Wrapped Ether')
+    return ensureSdkWeth(chainId, cachedWeth)
   }
 
   // 尝试从 SDK 获取 (使用类型断言，可能返回 undefined)
@@ -52,7 +60,7 @@ export function getWrappedToken(chainId: number, wethAddress?: string): Token {
   const configuredWethAddress = getConfiguredWethAddress(chainId)
   const customAddress = wethAddress || configuredWethAddress || getCachedWethAddress(chainId)
   if (customAddress) {
-    return new Token(chainId, customAddress, 18, 'WETH', 'Wrapped Ether')
+    return ensureSdkWeth(chainId, customAddress)
   }
   // 回退到 SDK 默认 (使用类型断言)
   const chainIdKey = chainId as ChainId
@@ -69,7 +77,7 @@ export function wrappedCurrency(currency: Currency | undefined, chainId: ChainId
   // 自定义 WETH 地址优先 (显式传入 > 配置)
   const configuredWethAddress = getConfiguredWethAddress(chainId)
   const customAddress = wethAddress || configuredWethAddress || getCachedWethAddress(chainId)
-  const customWeth = customAddress ? new Token(chainId, customAddress, 18, 'WETH', 'Wrapped Ether') : undefined
+  const customWeth = customAddress ? ensureSdkWeth(chainId, customAddress) : undefined
 
   if (currency === ETHER) {
     return customWeth || getWETH(chainId)
