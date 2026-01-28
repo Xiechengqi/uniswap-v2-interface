@@ -27,9 +27,11 @@ import {
   getEnvRouterAddress,
   getEnvTokenAddress,
   getEnvBlockscoutUrl,
+  getEnvPairAddress,
   getRpcUrl,
   getRouterAddress,
   getTokenAddress,
+  getPairAddress,
   getBlockscoutUrl,
   clearBlockscoutTokenListCache,
   saveConfigToStorage
@@ -186,6 +188,9 @@ export default function SettingsTab() {
   const [tokenAddress, setTokenAddress] = useState<string>(
     storedConfig?.tokenAddress || getTokenAddress(chainId)
   )
+  const [pairAddress, setPairAddress] = useState<string>(
+    storedConfig?.pairAddress || getPairAddress(chainId)
+  )
   const [blockscoutUrl, setBlockscoutUrl] = useState<string>(
     storedConfig?.blockscoutUrl || getBlockscoutUrl(chainId)
   )
@@ -213,6 +218,7 @@ export default function SettingsTab() {
     if (!routerAddress || !isAddress(routerAddress)) return 'Router address is invalid.'
     if (tokenRequired && !tokenAddress) return 'Token address is required.'
     if (tokenAddress && !isAddress(tokenAddress)) return 'Token address is invalid.'
+    if (pairAddress && !isAddress(pairAddress)) return 'Pair address is invalid.'
     if (blockscoutUrl) {
       try {
         // eslint-disable-next-line no-new
@@ -232,6 +238,7 @@ export default function SettingsTab() {
       rpcUrl,
       routerAddress,
       tokenAddress,
+      pairAddress,
       tokenRequired,
       blockscoutUrl: blockscoutUrl ? blockscoutUrl : undefined
     })
@@ -286,6 +293,7 @@ export default function SettingsTab() {
     setRpcUrl(getEnvRpcUrl())
     setRouterAddress(getEnvRouterAddress())
     setTokenAddress(getEnvTokenAddress())
+    setPairAddress(getEnvPairAddress())
     setBlockscoutUrl(getEnvBlockscoutUrl() || getBlockscoutUrl(chainId))
     setTokenRequired(Boolean(getEnvTokenAddress()))
     setConfigError(null)
@@ -438,6 +446,21 @@ export default function SettingsTab() {
                 value={tokenAddress}
                 onChange={event => {
                   setTokenAddress(event.target.value)
+                  setConfigError(null)
+                  setSaveMessage(null)
+                  setTestMessage(null)
+                }}
+                placeholder="0x..."
+              />
+            </ConfigRow>
+            <ConfigRow>
+              <TYPE.black fontWeight={400} fontSize={12} color={theme.text2}>
+                Pair Address (optional)
+              </TYPE.black>
+              <ConfigInput
+                value={pairAddress}
+                onChange={event => {
+                  setPairAddress(event.target.value)
                   setConfigError(null)
                   setSaveMessage(null)
                   setTestMessage(null)

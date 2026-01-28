@@ -14,7 +14,7 @@ import { Contract } from '@ethersproject/contracts'
 import ERC20_ABI from '../../constants/abis/erc20.json'
 import { getPrivateChainId, isPrivateChain } from '../../utils/switchNetwork'
 import { TokenList, TokenInfo } from '@uniswap/token-lists'
-import { getBlockscoutTokenListCacheKey, getBlockscoutUrl } from '../../utils/appConfig'
+import { getBlockscoutTokenListCacheKey, getBlockscoutUrl, getPairAddress } from '../../utils/appConfig'
 import { isAddress } from '../../utils'
 
 export default function Updater(): null {
@@ -118,6 +118,76 @@ export default function Updater(): null {
   useEffect(() => {
     // Always attempt Blockscout sync for the configured private chain
     let stale = false
+    const configuredPairAddress = getPairAddress(privateChainId)
+    if (configuredPairAddress) {
+      if (!library) {
+        return () => {
+          stale = true
+        }
+      }
+      const pairContract = new Contract(
+        configuredPairAddress,
+        ['function token0() view returns (address)', 'function token1() view returns (address)'],
+        library
+      )
+
+      const buildPairList = async () => {
+        try {
+          const [token0, token1] = await Promise.all([pairContract.token0(), pairContract.token1()])
+          const effectiveChainId = chainId ?? privateChainId
+          const nextList: TokenList = {
+            name: 'Private Chain Pair Tokens',
+            timestamp: new Date().toISOString(),
+            version: { major: 1, minor: 0, patch: 0 },
+            tokens: [
+              { chainId: effectiveChainId, address: token0, decimals: 18, symbol: 'TOKEN0', name: 'Token0' },
+              { chainId: effectiveChainId, address: token1, decimals: 18, symbol: 'TOKEN1', name: 'Token1' }
+            ]
+          }
+          if (stale) return
+          const requestId = `pair-config-${Date.now()}`
+          dispatch(fetchTokenList.fulfilled({ url: PRIVATE_CHAIN_LIST_URL, tokenList: nextList, requestId }))
+          dispatch(acceptListUpdate(PRIVATE_CHAIN_LIST_URL))
+        } catch (error) {
+          console.debug('Failed to load pair tokens, falling back to base list', error)
+          const current = lists[PRIVATE_CHAIN_LIST_URL]?.current
+          const baseList = PRIVATE_CHAIN_TOKEN_LIST
+          const currentMap = new Map((current?.tokens ?? []).map(token => [token.address.toLowerCase(), token]))
+          const hasChanges =
+            !current ||
+            current.tokens.length !== baseList.tokens.length ||
+            baseList.tokens.some(token => {
+              const existing = currentMap.get(token.address.toLowerCase())
+              return (
+                !existing ||
+                token.symbol !== existing.symbol ||
+                token.name !== existing.name ||
+                token.decimals !== existing.decimals
+              )
+            })
+
+          if (hasChanges && !stale) {
+            const nextList: TokenList = {
+              ...baseList,
+              timestamp: new Date().toISOString(),
+              version: {
+                ...baseList.version,
+                patch: baseList.version.patch + 1
+              }
+            }
+            const requestId = `pair-config-fallback-${Date.now()}`
+            dispatch(fetchTokenList.fulfilled({ url: PRIVATE_CHAIN_LIST_URL, tokenList: nextList, requestId }))
+            dispatch(acceptListUpdate(PRIVATE_CHAIN_LIST_URL))
+          }
+        }
+      }
+
+      buildPairList().catch(error => console.debug('Failed to update pair token list', error))
+
+      return () => {
+        stale = true
+      }
+    }
     const effectiveChainId = privateChainId
     const baseUrl = getBlockscoutUrl(effectiveChainId).replace(/\/$/, '')
     if (!baseUrl) return
@@ -239,7 +309,7 @@ export default function Updater(): null {
     return () => {
       stale = true
     }
-  }, [dispatch, lists, privateChainId])
+  }, [chainId, dispatch, library, lists, privateChainId])
 
   // refresh private-chain token metadata from ERC20
   useEffect(() => {

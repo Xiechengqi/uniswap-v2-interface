@@ -6,6 +6,7 @@ import { useActiveWeb3React } from '../hooks'
 
 import { useMultipleContractSingleData } from '../state/multicall/hooks'
 import { wrappedCurrency } from '../utils/wrappedCurrency'
+import { getPairAddress, getTokenAddress } from '../utils/appConfig'
 
 const PAIR_INTERFACE = new Interface(IUniswapV2PairABI)
 
@@ -31,9 +32,21 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
   const pairAddresses = useMemo(
     () =>
       tokens.map(([tokenA, tokenB]) => {
-        return tokenA && tokenB && !tokenA.equals(tokenB) ? Pair.getAddress(tokenA, tokenB) : undefined
+        if (!tokenA || !tokenB || tokenA.equals(tokenB)) return undefined
+        const configuredPairAddress = getPairAddress(chainId ?? undefined)
+        if (configuredPairAddress) {
+          const configuredTokenAddress = getTokenAddress(chainId ?? undefined)
+          const matchesConfiguredToken =
+            !configuredTokenAddress ||
+            tokenA.address.toLowerCase() === configuredTokenAddress.toLowerCase() ||
+            tokenB.address.toLowerCase() === configuredTokenAddress.toLowerCase()
+          if (matchesConfiguredToken) {
+            return configuredPairAddress
+          }
+        }
+        return Pair.getAddress(tokenA, tokenB)
       }),
-    [tokens]
+    [tokens, chainId]
   )
 
   const results = useMultipleContractSingleData(pairAddresses, PAIR_INTERFACE, 'getReserves')
