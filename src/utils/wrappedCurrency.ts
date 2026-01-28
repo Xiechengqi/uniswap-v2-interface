@@ -1,7 +1,13 @@
 import { ChainId, Currency, CurrencyAmount, ETHER, Token, TokenAmount, WETH } from '@im33357/uniswap-v2-sdk'
+import { getWethAddress } from './appConfig'
 
 // 环境变量配置的 WETH 地址
 const ENV_WETH_ADDRESS = process.env.REACT_APP_WETH_ADDRESS || ''
+
+function getConfiguredWethAddress(chainId: number | undefined): string {
+  if (!chainId) return ''
+  return getWethAddress(chainId) || ENV_WETH_ADDRESS || ''
+}
 
 function getCachedWethAddress(chainId: number | undefined): string {
   if (!chainId) return ''
@@ -14,14 +20,15 @@ function getCachedWethAddress(chainId: number | undefined): string {
 
 /**
  * 安全获取 WETH Token (支持任意 chainId)
- * 优先级: 环境变量 > SDK 默认 > MAINNET 默认
+ * 优先级: 配置 > SDK 默认 > MAINNET 默认
  */
 export function getWETH(chainId: number | undefined): Token | undefined {
   if (!chainId) return undefined
 
-  // 优先使用环境变量配置的 WETH
-  if (ENV_WETH_ADDRESS) {
-    return new Token(chainId, ENV_WETH_ADDRESS, 18, 'WETH', 'Wrapped Ether')
+  // 优先使用配置的 WETH
+  const configuredWethAddress = getConfiguredWethAddress(chainId)
+  if (configuredWethAddress) {
+    return new Token(chainId, configuredWethAddress, 18, 'WETH', 'Wrapped Ether')
   }
 
   const cachedWeth = getCachedWethAddress(chainId)
@@ -39,10 +46,11 @@ export function getWETH(chainId: number | undefined): Token | undefined {
 
 /**
  * 获取指定 chainId 的 WETH Token (支持自定义地址)
- * 优先级: 显式传入 > 环境变量 > SDK 默认
+ * 优先级: 显式传入 > 配置 > SDK 默认
  */
 export function getWrappedToken(chainId: number, wethAddress?: string): Token {
-  const customAddress = wethAddress || ENV_WETH_ADDRESS || getCachedWethAddress(chainId)
+  const configuredWethAddress = getConfiguredWethAddress(chainId)
+  const customAddress = wethAddress || configuredWethAddress || getCachedWethAddress(chainId)
   if (customAddress) {
     return new Token(chainId, customAddress, 18, 'WETH', 'Wrapped Ether')
   }
@@ -53,13 +61,14 @@ export function getWrappedToken(chainId: number, wethAddress?: string): Token {
 
 /**
  * 包装 Currency 为 Token (支持自定义 WETH)
- * 优先级: 显式传入 > 环境变量 > SDK 默认
+ * 优先级: 显式传入 > 配置 > SDK 默认
  */
 export function wrappedCurrency(currency: Currency | undefined, chainId: ChainId | undefined, wethAddress?: string): Token | undefined {
   if (!chainId) return undefined
 
-  // 自定义 WETH 地址优先 (显式传入 > 环境变量)
-  const customAddress = wethAddress || ENV_WETH_ADDRESS || getCachedWethAddress(chainId)
+  // 自定义 WETH 地址优先 (显式传入 > 配置)
+  const configuredWethAddress = getConfiguredWethAddress(chainId)
+  const customAddress = wethAddress || configuredWethAddress || getCachedWethAddress(chainId)
   const customWeth = customAddress ? new Token(chainId, customAddress, 18, 'WETH', 'Wrapped Ether') : undefined
 
   if (currency === ETHER) {
@@ -82,11 +91,12 @@ export function wrappedCurrencyAmount(
 
 /**
  * 解包 Token 为 Currency (支持自定义 WETH)
- * 优先级: 显式传入 > 环境变量 > SDK 默认
+ * 优先级: 显式传入 > 配置 > SDK 默认
  */
 export function unwrappedToken(token: Token, wethAddress?: string): Currency {
-  // 检查是否是自定义 WETH (显式传入 > 环境变量)
-  const customAddress = wethAddress || ENV_WETH_ADDRESS || getCachedWethAddress(token.chainId)
+  // 检查是否是自定义 WETH (显式传入 > 配置)
+  const configuredWethAddress = getConfiguredWethAddress(token.chainId)
+  const customAddress = wethAddress || configuredWethAddress || getCachedWethAddress(token.chainId)
   if (customAddress && token.address.toLowerCase() === customAddress.toLowerCase()) {
     return ETHER
   }

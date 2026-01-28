@@ -26,9 +26,11 @@ import {
   getEnvRpcUrl,
   getEnvRouterAddress,
   getEnvTokenAddress,
+  getEnvWethAddress,
   getRpcUrl,
   getRouterAddress,
   getTokenAddress,
+  getWethAddress,
   saveConfigToStorage
 } from '../../utils/appConfig'
 import { isAddress } from '../../utils'
@@ -183,6 +185,9 @@ export default function SettingsTab() {
   const [tokenAddress, setTokenAddress] = useState<string>(
     storedConfig?.tokenAddress || getTokenAddress(chainId)
   )
+  const [wethAddress, setWethAddress] = useState<string>(
+    storedConfig?.wethAddress || getWethAddress(chainId)
+  )
   const [tokenRequired, setTokenRequired] = useState<boolean>(
     storedConfig?.tokenRequired ?? Boolean(storedConfig?.tokenAddress || getEnvTokenAddress())
   )
@@ -208,6 +213,7 @@ export default function SettingsTab() {
     if (!routerAddress || !isAddress(routerAddress)) return 'Router address is invalid.'
     if (tokenRequired && !tokenAddress) return 'Token address is required.'
     if (tokenAddress && !isAddress(tokenAddress)) return 'Token address is invalid.'
+    if (wethAddress && !isAddress(wethAddress)) return 'WETH address is invalid.'
     return null
   }
 
@@ -219,6 +225,7 @@ export default function SettingsTab() {
       rpcUrl,
       routerAddress,
       tokenAddress,
+      wethAddress,
       tokenRequired
     })
     setSaveMessage('Saved. Refreshing...')
@@ -257,8 +264,8 @@ export default function SettingsTab() {
       }
 
       const provider = new JsonRpcProvider(rpcUrl)
-      const router = new Contract(routerAddress, ['function WETH() view returns (address)'], provider)
-      await router.WETH()
+      const router = new Contract(routerAddress, ['function factory() view returns (address)'], provider)
+      await router.factory()
       setTestMessage('Connection OK.')
     } catch (error) {
       setTestMessage('Connection failed.')
@@ -276,13 +283,10 @@ export default function SettingsTab() {
       }
       try {
         const provider = new JsonRpcProvider(rpcUrl)
-        const router = new Contract(
-          routerAddress,
-          ['function WETH() view returns (address)', 'function factory() view returns (address)'],
-          provider
-        )
-        const [weth, factory] = await Promise.all([router.WETH(), router.factory()])
-        if (!factory || !weth) {
+        const router = new Contract(routerAddress, ['function factory() view returns (address)'], provider)
+        const factory = await router.factory()
+        const weth = wethAddress
+        if (!factory || !weth || !tokenAddress) {
           if (!stale) setPairAddressDisplay('')
           return
         }
@@ -301,13 +305,14 @@ export default function SettingsTab() {
     return () => {
       stale = true
     }
-  }, [rpcUrl, routerAddress, tokenAddress])
+  }, [rpcUrl, routerAddress, tokenAddress, wethAddress])
 
   const handleResetConfig = () => {
     clearConfigFromStorage(chainId)
     setRpcUrl(getEnvRpcUrl())
     setRouterAddress(getEnvRouterAddress())
     setTokenAddress(getEnvTokenAddress())
+    setWethAddress(getEnvWethAddress())
     setTokenRequired(Boolean(getEnvTokenAddress()))
     setConfigError(null)
     setSaveMessage('Reset to defaults. Refreshing...')
@@ -452,6 +457,21 @@ export default function SettingsTab() {
                 value={tokenAddress}
                 onChange={event => {
                   setTokenAddress(event.target.value)
+                  setConfigError(null)
+                  setSaveMessage(null)
+                  setTestMessage(null)
+                }}
+                placeholder="0x..."
+              />
+            </ConfigRow>
+            <ConfigRow>
+              <TYPE.black fontWeight={400} fontSize={12} color={theme.text2}>
+                WETH Address
+              </TYPE.black>
+              <ConfigInput
+                value={wethAddress}
+                onChange={event => {
+                  setWethAddress(event.target.value)
                   setConfigError(null)
                   setSaveMessage(null)
                   setTestMessage(null)

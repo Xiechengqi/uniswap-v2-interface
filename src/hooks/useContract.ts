@@ -11,6 +11,7 @@ import UNISOCKS_ABI from '../constants/abis/unisocks.json'
 import WETH_ABI from '../constants/abis/weth.json'
 import { MULTICALL_ABI, MULTICALL_NETWORKS } from '../constants/multicall'
 import { ROUTER_ADDRESS } from '../constants'
+import { getWethAddress } from '../utils/appConfig'
 import { V1_EXCHANGE_ABI, V1_FACTORY_ABI, V1_FACTORY_ADDRESSES } from '../constants/v1'
 import { getContract } from '../utils'
 import { getWETH } from '../utils/wrappedCurrency'
@@ -61,6 +62,7 @@ export function useWETHAddress(): string | undefined {
 
   // 优先级1: 环境变量
   const envWethAddress = process.env.REACT_APP_WETH_ADDRESS
+  const configuredWethAddress = useMemo(() => (chainId ? getWethAddress(chainId) : undefined), [chainId])
   const cachedWethAddress = useMemo(() => {
     if (!chainId) return undefined
     try {
@@ -73,7 +75,7 @@ export function useWETHAddress(): string | undefined {
 
   // 优先级2: 从 Router 动态获取
   useEffect(() => {
-    if (envWethAddress || !library || !ROUTER_ADDRESS) return
+    if (envWethAddress || configuredWethAddress || !library || !ROUTER_ADDRESS) return
 
     const fetchWETH = async () => {
       try {
@@ -98,6 +100,7 @@ export function useWETHAddress(): string | undefined {
 
   // 返回优先级: 环境变量 > Router > SDK 默认
   if (envWethAddress) return envWethAddress
+  if (configuredWethAddress) return configuredWethAddress
   if (routerWethAddress) return routerWethAddress
   if (cachedWethAddress) return cachedWethAddress
 

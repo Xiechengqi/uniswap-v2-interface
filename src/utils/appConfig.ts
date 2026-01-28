@@ -2,6 +2,7 @@ export type AppConfig = {
   rpcUrl?: string
   routerAddress?: string
   tokenAddress?: string
+  wethAddress?: string
   tokenRequired?: boolean
   updatedAt?: number
 }
@@ -22,6 +23,10 @@ export function getEnvRouterAddress(): string {
 
 export function getEnvTokenAddress(): string {
   return process.env.REACT_APP_TOKEN_ADDRESS || ''
+}
+
+export function getEnvWethAddress(): string {
+  return process.env.REACT_APP_WETH_ADDRESS || ''
 }
 
 export function getConfigFromStorage(chainId: number): AppConfig | null {
@@ -67,4 +72,9 @@ export function getRouterAddress(chainId: number = getChainId()): string {
 export function getTokenAddress(chainId: number = getChainId()): string {
   const stored = getConfigFromStorage(chainId)
   return stored?.tokenAddress || getEnvTokenAddress()
+}
+
+export function getWethAddress(chainId: number = getChainId()): string {
+  const stored = getConfigFromStorage(chainId)
+  return stored?.wethAddress || getEnvWethAddress()
 }
