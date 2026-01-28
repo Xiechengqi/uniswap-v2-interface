@@ -85,9 +85,25 @@ export function useTradeExactIn(currencyAmountIn?: CurrencyAmount, currencyOut?:
   const allowedPairs = useAllCommonPairs(currencyAmountIn?.currency, currencyOut)
   return useMemo(() => {
     if (currencyAmountIn && currencyOut && allowedPairs.length > 0) {
-      return (
-        Trade.bestTradeExactIn(allowedPairs, currencyAmountIn, currencyOut, { maxHops: 3, maxNumResults: 1 })[0] ?? null
-      )
+      try {
+        return (
+          Trade.bestTradeExactIn(allowedPairs, currencyAmountIn, currencyOut, { maxHops: 3, maxNumResults: 1 })[0] ??
+          null
+        )
+      } catch (error) {
+        console.debug('[trade] exact in failed', {
+          error,
+          input: currencyAmountIn?.currency?.symbol,
+          output: currencyOut?.symbol,
+          pairs: allowedPairs.map(pair => ({
+            token0: pair.token0?.address,
+            token1: pair.token1?.address,
+            token0Decimals: pair.token0?.decimals,
+            token1Decimals: pair.token1?.decimals
+          }))
+        })
+        return null
+      }
     }
     return null
   }, [allowedPairs, currencyAmountIn, currencyOut])
@@ -101,10 +117,25 @@ export function useTradeExactOut(currencyIn?: Currency, currencyAmountOut?: Curr
 
   return useMemo(() => {
     if (currencyIn && currencyAmountOut && allowedPairs.length > 0) {
-      return (
-        Trade.bestTradeExactOut(allowedPairs, currencyIn, currencyAmountOut, { maxHops: 3, maxNumResults: 1 })[0] ??
-        null
-      )
+      try {
+        return (
+          Trade.bestTradeExactOut(allowedPairs, currencyIn, currencyAmountOut, { maxHops: 3, maxNumResults: 1 })[0] ??
+          null
+        )
+      } catch (error) {
+        console.debug('[trade] exact out failed', {
+          error,
+          input: currencyIn?.symbol,
+          output: currencyAmountOut?.currency?.symbol,
+          pairs: allowedPairs.map(pair => ({
+            token0: pair.token0?.address,
+            token1: pair.token1?.address,
+            token0Decimals: pair.token0?.decimals,
+            token1Decimals: pair.token1?.decimals
+          }))
+        })
+        return null
+      }
     }
     return null
   }, [allowedPairs, currencyIn, currencyAmountOut])
