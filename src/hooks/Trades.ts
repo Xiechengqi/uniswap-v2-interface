@@ -69,20 +69,33 @@ function useAllCommonPairs(currencyA?: Currency, currencyB?: Currency): Pair[] {
   const allPairs = usePairs(allPairCombinations)
 
   // only pass along valid pairs, non-duplicated pairs
-  return useMemo(
-    () =>
-      Object.values(
-        allPairs
-          // filter out invalid pairs
-          .filter((result): result is [PairState.EXISTS, Pair] => Boolean(result[0] === PairState.EXISTS && result[1]))
-          // filter out duplicated pairs
-          .reduce<{ [pairAddress: string]: Pair }>((memo, [, curr]) => {
-            memo[curr.liquidityToken.address] = memo[curr.liquidityToken.address] ?? curr
-            return memo
-          }, {})
-      ),
-    [allPairs]
-  )
+  return useMemo(() => {
+    const states = allPairs.map(([state, pair]) => ({
+      state,
+      pairAddress: pair?.liquidityToken?.address ?? null,
+      token0: pair?.token0?.address ?? null,
+      token1: pair?.token1?.address ?? null
+    }))
+    console.debug('[trade] pairs summary', {
+      chainId,
+      tokenA: tokenA?.address ?? null,
+      tokenB: tokenB?.address ?? null,
+      bases: bases.map(base => base.address),
+      combinations: allPairCombinations.map(([a, b]) => [a.address, b.address]),
+      states
+    })
+
+    return Object.values(
+      allPairs
+        // filter out invalid pairs
+        .filter((result): result is [PairState.EXISTS, Pair] => Boolean(result[0] === PairState.EXISTS && result[1]))
+        // filter out duplicated pairs
+        .reduce<{ [pairAddress: string]: Pair }>((memo, [, curr]) => {
+          memo[curr.liquidityToken.address] = memo[curr.liquidityToken.address] ?? curr
+          return memo
+        }, {})
+    )
+  }, [allPairs, allPairCombinations, bases, chainId, tokenA, tokenB])
 }
 
 /**
