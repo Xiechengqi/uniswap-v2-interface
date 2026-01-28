@@ -1,7 +1,7 @@
 import { BigNumber } from '@ethersproject/bignumber'
 import { Contract } from '@ethersproject/contracts'
 import { JSBI, Percent, Router, SwapParameters, Trade, TradeType } from '@im33357/uniswap-v2-sdk'
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { BIPS_BASE, DEFAULT_DEADLINE_FROM_NOW, INITIAL_ALLOWED_SLIPPAGE } from '../constants'
 import { getTradeVersion, useV1TradeExchangeAddress } from '../data/V1'
 import { useTransactionAdder } from '../state/transactions/hooks'
@@ -50,6 +50,7 @@ function useSwapCallArguments(
   recipientAddressOrName: string | null // the ENS name or address of the recipient of the trade, or null if swap should be returned to sender
 ): SwapCall[] {
   const { account, chainId, library } = useActiveWeb3React()
+  const lastLogRef = useRef(0)
 
   const { address: recipientAddress } = useENS(recipientAddressOrName)
   const recipient = recipientAddressOrName === null ? account : recipientAddress
@@ -100,7 +101,18 @@ function useSwapCallArguments(
         )
         break
     }
-    return swapMethods.map(parameters => ({ parameters, contract }))
+    const calls = swapMethods.map(parameters => ({ parameters, contract }))
+    const now = Date.now()
+    if (now - lastLogRef.current > 2000) {
+      lastLogRef.current = now
+      console.debug('[swap] call params', {
+        tradeVersion,
+        methodNames: calls.map(call => call.parameters.methodName),
+        args: calls.map(call => call.parameters.args),
+        values: calls.map(call => call.parameters.value?.toString?.() ?? call.parameters.value ?? null)
+      })
+    }
+    return calls
   }, [account, allowedSlippage, chainId, deadline, library, recipient, trade, v1Exchange])
 }
 
@@ -163,6 +175,14 @@ export function useSwapCallback(
                   })
                   .catch(callError => {
                     console.debug('Call threw error', call, callError)
+                    console.debug('[swap] call error details', {
+                      reason: callError?.reason ?? null,
+                      code: callError?.code ?? null,
+                      message: callError?.message ?? null,
+                      errorMessage: callError?.error?.message ?? null,
+                      dataMessage: callError?.data?.message ?? null,
+                      data: callError?.data ?? null
+                    })
                     let errorMessage: string
                     switch (callError.reason) {
                       case 'UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT':
@@ -171,7 +191,9 @@ export function useSwapCallback(
                           'This transaction will not succeed either due to price movement or fee on transfer. Try increasing your slippage tolerance.'
                         break
                       default:
-                        errorMessage = `The transaction cannot succeed due to error: ${callError.reason}. This is probably an issue with one of the tokens you are swapping.`
+                        errorMessage = `The transaction cannot succeed due to error: ${
+                          callError?.reason ?? callError?.error?.message ?? callError?.data?.message ?? 'unknown'
+                        }. This is probably an issue with one of the tokens you are swapping.`
                     }
                     return { call, error: new Error(errorMessage) }
                   })
