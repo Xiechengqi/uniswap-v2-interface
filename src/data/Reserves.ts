@@ -1,4 +1,4 @@
-import { TokenAmount, Pair, Currency } from '@im33357/uniswap-v2-sdk'
+import { TokenAmount, Pair, Currency, Token } from '@im33357/uniswap-v2-sdk'
 import { AddressZero } from '@ethersproject/constants'
 import { Contract } from '@ethersproject/contracts'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -32,15 +32,6 @@ const MAX_RESERVE_CONCURRENCY = 3
 export function usePairs(currencies: [Currency | undefined, Currency | undefined][]): [PairState, Pair | null][] {
   const { chainId, library } = useActiveWeb3React()
 
-  const tokens = useMemo(
-    () =>
-      currencies.map(([currencyA, currencyB]) => [
-        wrappedCurrency(currencyA, chainId),
-        wrappedCurrency(currencyB, chainId)
-      ]),
-    [chainId, currencies]
-  )
-
   const tokenAddressPairs = useMemo(() => {
     return currencies.map(([currencyA, currencyB]) => {
       const tokenA = wrappedCurrency(currencyA, chainId)
@@ -62,6 +53,40 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
     )
     return hasValid ? tokenAddressPairs : fallbackTokenAddressPairs
   }, [fallbackTokenAddressPairs, tokenAddressPairs])
+
+  const tokens = useMemo(() => {
+    const wrappedFromCurrencies = currencies.map(([currencyA, currencyB]) => [
+      wrappedCurrency(currencyA, chainId),
+      wrappedCurrency(currencyB, chainId)
+    ])
+
+    return effectiveTokenAddressPairs.map(([tokenAAddress, tokenBAddress], index) => {
+      const [currencyTokenA, currencyTokenB] = wrappedFromCurrencies[index] ?? []
+      const tokenA =
+        currencyTokenA ??
+        (chainId && tokenAAddress
+          ? new Token(
+              chainId,
+              tokenAAddress,
+              18,
+              tokenAAddress.toLowerCase() === getWethAddress(chainId)?.toLowerCase() ? 'WETH' : 'TOKEN',
+              'Token'
+            )
+          : undefined)
+      const tokenB =
+        currencyTokenB ??
+        (chainId && tokenBAddress
+          ? new Token(
+              chainId,
+              tokenBAddress,
+              18,
+              tokenBAddress.toLowerCase() === getWethAddress(chainId)?.toLowerCase() ? 'WETH' : 'TOKEN',
+              'Token'
+            )
+          : undefined)
+      return [tokenA, tokenB]
+    })
+  }, [chainId, currencies, effectiveTokenAddressPairs])
 
   const tokenAddressKey = useMemo(
     () => effectiveTokenAddressPairs.map(([a, b]) => `${a}:${b}`).join('|'),
