@@ -33,12 +33,27 @@ export default createReducer<SwapState>(initialState, builder =>
     .addCase(
       replaceSwapState,
       (state, { payload: { typedValue, recipient, field, inputCurrencyId, outputCurrencyId } }) => {
+        const lockedTokenAddress = getTokenAddress()
+        const resolvedInput =
+          inputCurrencyId ||
+          (lockedTokenAddress
+            ? outputCurrencyId && outputCurrencyId.toLowerCase() === lockedTokenAddress.toLowerCase()
+              ? 'ETH'
+              : 'ETH'
+            : inputCurrencyId)
+        const resolvedOutput =
+          outputCurrencyId ||
+          (lockedTokenAddress
+            ? inputCurrencyId && inputCurrencyId.toLowerCase() === 'eth'
+              ? lockedTokenAddress
+              : lockedTokenAddress
+            : outputCurrencyId)
         return {
           [Field.INPUT]: {
-            currencyId: inputCurrencyId
+            currencyId: resolvedInput
           },
           [Field.OUTPUT]: {
-            currencyId: outputCurrencyId
+            currencyId: resolvedOutput
           },
           independentField: field,
           typedValue: typedValue,
