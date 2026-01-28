@@ -21,7 +21,8 @@ export default function Updater(): null {
   const dispatch = useDispatch<AppDispatch>()
   const lists = useSelector<AppState, AppState['lists']['byUrl']>(state => state.lists.byUrl)
   const selectedListUrl = useSelector<AppState, AppState['lists']['selectedListUrl']>(state => state.lists.selectedListUrl)
-  const isPrivate = isPrivateChain(chainId ?? getPrivateChainId())
+  const privateChainId = getPrivateChainId()
+  const isPrivate = isPrivateChain(chainId ?? privateChainId)
 
   const isWindowVisible = useIsWindowVisible()
 
@@ -112,12 +113,12 @@ export default function Updater(): null {
 
   // fetch blockscout token list for private chain
   useEffect(() => {
-    if (!isPrivate) return
+    // Always attempt Blockscout sync for the configured private chain
     const privateList = lists[PRIVATE_CHAIN_LIST_URL]?.current
     if (!privateList) return
 
     let stale = false
-    const effectiveChainId = chainId ?? getPrivateChainId()
+    const effectiveChainId = privateChainId
     const baseUrl = getBlockscoutUrl(effectiveChainId).replace(/\/$/, '')
     if (!baseUrl) return
 
@@ -249,7 +250,7 @@ export default function Updater(): null {
     return () => {
       stale = true
     }
-  }, [chainId, dispatch, isPrivate, lists])
+  }, [dispatch, lists, privateChainId])
 
   // refresh private-chain token metadata from ERC20
   useEffect(() => {
