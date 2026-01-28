@@ -268,7 +268,15 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
       stale = true
       if (debounceTimer) clearTimeout(debounceTimer)
     }
-  }, [chainId, library, tokenAddressKey, effectiveTokenAddressPairs])
+  }, [
+    chainId,
+    library,
+    tokenAddressKey,
+    effectiveTokenAddressPairs,
+    fallbackTokenAddressPairs,
+    tokenAddressPairs,
+    tokens
+  ])
 
   return useMemo(() => {
     return results.map((result, i) => {
