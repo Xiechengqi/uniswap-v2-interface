@@ -102,11 +102,19 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
       const hasValidPair = effectiveTokenAddressPairs.some(
         ([a, b]) => a && b && a.toLowerCase() !== b.toLowerCase()
       )
+      const hasDirectValidPair = tokenAddressPairs.some(
+        ([a, b]) => a && b && a.toLowerCase() !== b.toLowerCase()
+      )
+      const usingFallback = !hasDirectValidPair && fallbackTokenAddressPairs.length > 0
       console.debug('[pairs] start', {
         chainId,
         hasLibrary: Boolean(library),
         tokenAddressPairs: effectiveTokenAddressPairs,
-        hasValidPair
+        hasValidPair,
+        usingFallback
+      })
+      console.debug('[pairs] tokens', {
+        tokens: tokens.map(([tokenA, tokenB]) => [tokenA?.address ?? null, tokenB?.address ?? null])
       })
       if (!library || effectiveTokenAddressPairs.length === 0 || !hasValidPair) {
         if (!stale) setResults(effectiveTokenAddressPairs.map(() => ({ loading: false })))
@@ -172,6 +180,7 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
             }
           })
         )
+        console.debug('[pairs] pairLookups', { pairLookups })
 
         pairLookups.forEach((address, index) => {
           if (typeof address === 'string' && address !== AddressZero) {
@@ -201,6 +210,7 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
                 updatedAt: Date.now()
               }
               cacheRef.current.reservesByPair.set(normalized, stored)
+              console.debug('[pairs] reserves', { address, reserve0: stored.reserve0, reserve1: stored.reserve1 })
               return stored
             } catch (error) {
               console.debug('[pairs] getReserves failed', { address, error })
@@ -212,6 +222,9 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
         )
         console.debug('[pairs] reservesResults', { reservesResults })
         const missingReserves = pairAddresses.filter((address, index) => address && !reservesResults[index])
+        if (missingReserves.length > 0) {
+          console.debug('[pairs] missing reserves', { missingReserves })
+        }
         if (missingReserves.length > 0) {
           await asyncPool(
             missingReserves,

@@ -206,10 +206,14 @@ export function useDerivedSwapInfo(): {
       chainId,
       lockedTokenAddress,
       lockedTokenMeta,
+      hasLockedPair,
       inputCurrencyId,
       outputCurrencyId,
       effectiveInputCurrencyId,
       effectiveOutputCurrencyId,
+      defaultInputCurrency: defaultInputCurrency?.symbol,
+      defaultOutputCurrency: defaultOutputCurrency?.symbol,
+      lockedToken: lockedToken?.symbol,
       inputCurrency: inputCurrency?.symbol,
       outputCurrency: outputCurrency?.symbol,
       inputType: inputCurrency instanceof Token ? 'Token' : inputCurrency === ETHER ? 'ETH' : 'Unknown',
@@ -217,12 +221,16 @@ export function useDerivedSwapInfo(): {
     })
   }, [
     chainId,
+    defaultInputCurrency,
+    defaultOutputCurrency,
     effectiveInputCurrencyId,
     effectiveOutputCurrencyId,
+    hasLockedPair,
     inputCurrency,
     inputCurrencyId,
     lockedTokenAddress,
     lockedTokenMeta,
+    lockedToken,
     outputCurrency,
     outputCurrencyId
   ])
