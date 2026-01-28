@@ -20,6 +20,8 @@ import { SwapState } from './reducer'
 import useToggledVersion from '../../hooks/useToggledVersion'
 import { useUserSlippageTolerance } from '../user/hooks'
 import { computeSlippageAdjustedAmounts } from '../../utils/prices'
+import { getRouterAddress, getWethAddress } from '../../utils/appConfig'
+import { abi as IUniswapV2PairABI } from '@uniswap/v2-core/build/IUniswapV2Pair.json'
 import { DeploymentInfo } from '@im33357/uniswap-v2-sdk'
 import { Contract } from '@ethersproject/contracts'
 import ERC20_ABI from '../../constants/abis/erc20.json'
@@ -249,10 +251,52 @@ export function useDerivedSwapInfo(): {
 
   const forcedWeth = useMemo(() => wrappedCurrency(ETHER, chainId), [chainId])
   const hasForcedPair = Boolean(lockedToken && forcedWeth)
-  const [directPairState, directPair] = usePair(
+  const [directPairState] = usePair(
     hasForcedPair ? forcedWeth : inputCurrency ?? undefined,
     hasForcedPair ? lockedToken : outputCurrency ?? undefined
   )
+  const [directPair, setDirectPair] = useState<Pair | null>(null)
+  const lastDirectFetchRef = useRef(0)
+
+  useEffect(() => {
+    let stale = false
+    const fetchDirectPair = async () => {
+      if (!library || !chainId) return
+      if (!lockedTokenAddress) return
+      const wethAddress = getWethAddress(chainId)
+      const routerAddress = getRouterAddress(chainId)
+      if (!wethAddress || !routerAddress) return
+
+      const now = Date.now()
+      if (now - lastDirectFetchRef.current < 1500) return
+      lastDirectFetchRef.current = now
+
+      try {
+        const router = new Contract(routerAddress, ['function factory() view returns (address)'], library)
+        const factoryAddress = await router.factory()
+        if (!factoryAddress) return
+        const factory = new Contract(factoryAddress, ['function getPair(address,address) view returns (address)'], library)
+        const pairAddress = await factory.getPair(wethAddress, lockedTokenAddress)
+        if (!pairAddress || pairAddress === AddressZero) return
+        const pairContract = new Contract(pairAddress, IUniswapV2PairABI, library)
+        const reserves = await pairContract.getReserves()
+        const wethToken = new Token(chainId, wethAddress, 18, 'WETH', 'Wrapped Ether')
+        const tokenMeta = lockedTokenMeta ?? { symbol: 'TOKEN', name: 'Token', decimals: 18 }
+        const token = new Token(chainId, lockedTokenAddress, tokenMeta.decimals, tokenMeta.symbol, tokenMeta.name)
+        const [token0, token1] = wethToken.sortsBefore(token) ? [wethToken, token] : [token, wethToken]
+        const reserve0 = token0.equals(wethToken) ? reserves.reserve0 : reserves.reserve1
+        const reserve1 = token1.equals(token) ? reserves.reserve1 : reserves.reserve0
+        const pair = new Pair(new TokenAmount(token0, reserve0.toString()), new TokenAmount(token1, reserve1.toString()))
+        if (!stale) setDirectPair(pair)
+      } catch (error) {
+        console.debug('[swap] direct pair fetch failed', error)
+      }
+    }
+    fetchDirectPair()
+    return () => {
+      stale = true
+    }
+  }, [chainId, library, lockedTokenAddress, lockedTokenMeta])
 
   const directTrade = useMemo(() => {
     if (!directPair || !parsedAmount || !inputCurrency || !outputCurrency) return undefined
