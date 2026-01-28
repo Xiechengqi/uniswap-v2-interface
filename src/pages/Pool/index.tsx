@@ -1,18 +1,16 @@
 import React, { useContext, useMemo } from 'react'
 import { ThemeContext } from 'styled-components'
 import { Pair } from '@im33357/uniswap-v2-sdk'
-import { Link } from 'react-router-dom'
 import { SwapPoolTabs } from '../../components/NavigationTabs'
 
 import Question from '../../components/QuestionHelper'
 import FullPositionCard from '../../components/PositionCard'
-import { useUserHasLiquidityInAllTokens } from '../../data/V1'
 import { useTokenBalancesWithLoadingIndicator } from '../../state/wallet/hooks'
-import { StyledInternalLink, TYPE } from '../../theme'
+import { TYPE } from '../../theme'
 import { Text } from 'rebass'
 import { LightCard } from '../../components/Card'
 import { RowBetween } from '../../components/Row'
-import { ButtonPrimary, ButtonSecondary } from '../../components/Button'
+import { ButtonPrimary } from '../../components/Button'
 import { AutoColumn } from '../../components/Column'
 
 import { useActiveWeb3React } from '../../hooks'
@@ -20,12 +18,10 @@ import { usePairs } from '../../data/Reserves'
 import { toV2LiquidityToken, useTrackedTokenPairs } from '../../state/user/hooks'
 import AppBody from '../AppBody'
 import { Dots } from '../../components/swap/styleds'
-import { getPrivateChainId, isPrivateChain } from '../../utils/switchNetwork'
 
 export default function Pool() {
   const theme = useContext(ThemeContext)
-  const { account, chainId } = useActiveWeb3React()
-  const isPrivate = isPrivateChain(chainId ?? getPrivateChainId())
+  const { account } = useActiveWeb3React()
 
   // fetch the user's balances of all tracked V2 LP tokens
   const trackedTokenPairs = useTrackedTokenPairs()
@@ -55,8 +51,6 @@ export default function Pool() {
     fetchingV2PairBalances || v2Pairs?.length < liquidityTokensWithBalances.length || v2Pairs?.some(V2Pair => !V2Pair)
 
   const allV2PairsWithLiquidity = v2Pairs.map(([, pair]) => pair).filter((v2Pair): v2Pair is Pair => Boolean(v2Pair))
-
-  const hasV1Liquidity = useUserHasLiquidityInAllTokens()
 
   return (
     <>
@@ -103,27 +97,9 @@ export default function Pool() {
               </LightCard>
             )}
 
-            {!isPrivate && (
-              <div>
-                <Text textAlign="center" fontSize={14} style={{ padding: '.5rem 0 .5rem 0' }}>
-                  {hasV1Liquidity ? 'Uniswap V1 liquidity found!' : "Don't see a pool you joined?"}{' '}
-                  <StyledInternalLink id="import-pool-link" to={hasV1Liquidity ? '/migrate/v1' : '/find'}>
-                    {hasV1Liquidity ? 'Migrate now.' : 'Import it.'}
-                  </StyledInternalLink>
-                </Text>
-              </div>
-            )}
           </AutoColumn>
         </AutoColumn>
       </AppBody>
-
-      {!isPrivate && (
-        <div style={{ display: 'flex', alignItems: 'center', marginTop: '1.5rem' }}>
-          <ButtonSecondary as={Link} style={{ width: 'initial' }} to="/migrate/v1">
-            Migrate V1 Liquidity
-          </ButtonSecondary>
-        </div>
-      )}
     </>
   )
 }

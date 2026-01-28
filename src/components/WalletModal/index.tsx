@@ -206,7 +206,9 @@ export default function WalletModal({
   // get wallets user can switch too, depending on device/browser
   function getOptions() {
     const isMetamask = window.ethereum && window.ethereum.isMetaMask
-    const allowedWalletKeys = isPrivate ? ['INJECTED', 'WALLET_CONNECT'] : Object.keys(SUPPORTED_WALLETS)
+    const allowedWalletKeys = isPrivate
+      ? ['INJECTED', 'METAMASK', 'WALLET_CONNECT']
+      : Object.keys(SUPPORTED_WALLETS)
     return allowedWalletKeys.map(key => {
       const option = SUPPORTED_WALLETS[key]
       // check for mobile options
