@@ -142,7 +142,12 @@ export default function Updater(): null {
       }
       const requestId = `private-list-${Date.now()}`
       dispatch(fetchTokenList.fulfilled({ url: PRIVATE_CHAIN_LIST_URL, tokenList: nextList, requestId }))
-      dispatch(acceptListUpdate(PRIVATE_CHAIN_LIST_URL))
+      if (current) {
+        const upgradeType = getVersionUpgrade(current.version, nextList.version)
+        if (upgradeType !== VersionUpgrade.NONE) {
+          dispatch(acceptListUpdate(PRIVATE_CHAIN_LIST_URL))
+        }
+      }
     }
 
     return () => {
