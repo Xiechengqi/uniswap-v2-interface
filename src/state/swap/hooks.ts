@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useV1Trade } from '../../data/V1'
 import { useActiveWeb3React } from '../../hooks'
+import { getTokenAddress } from '../../utils/appConfig'
 import { useCurrency } from '../../hooks/Tokens'
 import { useTradeExactIn, useTradeExactOut } from '../../hooks/Trades'
 import useParsedQueryString from '../../hooks/useParsedQueryString'
@@ -286,6 +287,20 @@ export function useDefaultsFromURLSearch():
 
   useEffect(() => {
     if (!chainId) return
+    const lockedTokenAddress = getTokenAddress()
+    if (lockedTokenAddress) {
+      dispatch(
+        replaceSwapState({
+          typedValue: '',
+          field: Field.INPUT,
+          inputCurrencyId: 'ETH',
+          outputCurrencyId: lockedTokenAddress,
+          recipient: null
+        })
+      )
+      setResult({ inputCurrencyId: 'ETH', outputCurrencyId: lockedTokenAddress })
+      return
+    }
     const parsed = queryParametersToSwapState(parsedQs)
 
     dispatch(
