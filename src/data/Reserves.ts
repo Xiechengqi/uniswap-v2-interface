@@ -304,13 +304,18 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
   ])
 
   return useMemo(() => {
-    return results.map((result, i) => {
+    return effectiveTokenAddressPairs.map((_, i) => {
+      const result = results[i] ?? { loading: false }
       const { reserves, loading } = result
-      const tokenA = tokens[i][0]
-      const tokenB = tokens[i][1]
+      const tokenA = tokens[i]?.[0]
+      const tokenB = tokens[i]?.[1]
 
       if (loading) return [PairState.LOADING, null]
-      if (!tokenA || !tokenB || tokenA.equals(tokenB)) return [PairState.INVALID, null]
+      if (!tokenA || !tokenB) {
+        console.debug('[pairs] missing tokens for index', { index: i, tokenA, tokenB })
+        return [PairState.INVALID, null]
+      }
+      if (tokenA.equals(tokenB)) return [PairState.INVALID, null]
       if (!reserves) return [PairState.NOT_EXISTS, null]
       const { reserve0, reserve1 } = reserves
       const [token0, token1] = tokenA.sortsBefore(tokenB) ? [tokenA, tokenB] : [tokenB, tokenA]
@@ -319,7 +324,7 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
         new Pair(new TokenAmount(token0, reserve0), new TokenAmount(token1, reserve1))
       ]
     })
-  }, [results, tokens])
+  }, [effectiveTokenAddressPairs, results, tokens])
 }
 
 export function usePair(tokenA?: Currency, tokenB?: Currency): [PairState, Pair | null] {
