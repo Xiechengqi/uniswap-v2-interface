@@ -23,6 +23,16 @@ export async function switchToPrivateChain(): Promise<boolean> {
     return false
   }
 
+  const isChainNotAdded = (error: any): boolean => {
+    if (!error) return false
+    if (error.code === 4902) return true
+    if (error.code === -32603) {
+      const message = (error?.data?.message || error?.message || '').toString().toLowerCase()
+      return message.includes('unrecognized chain') || message.includes('unknown chain') || message.includes('not added')
+    }
+    return false
+  }
+
   try {
     // 尝试切换到私有链
     await ethereum.request({
@@ -32,8 +42,7 @@ export async function switchToPrivateChain(): Promise<boolean> {
     return true
   } catch (switchError) {
     // 错误码 4902 表示链不存在，需要添加
-    const err = switchError as any
-    if (err.code === 4902) {
+    if (isChainNotAdded(switchError)) {
       try {
         await ethereum.request({
           method: 'wallet_addEthereumChain',

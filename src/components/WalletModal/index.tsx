@@ -18,7 +18,7 @@ import { injected, fortmatic, portis } from '../../connectors'
 import { OVERLAY_READY } from '../../connectors/Fortmatic'
 import { WalletConnectConnector } from '@web3-react/walletconnect-connector'
 import { AbstractConnector } from '@web3-react/abstract-connector'
-import { getPrivateChainId, isPrivateChain } from '../../utils/switchNetwork'
+import { getPrivateChainId, isPrivateChain, switchToPrivateChain } from '../../utils/switchNetwork'
 
 const CloseIcon = styled.div`
   position: absolute;
@@ -184,6 +184,11 @@ export default function WalletModal({
     // if the connector is walletconnect and the user has already tried to connect, manually reset the connector
     if (connector instanceof WalletConnectConnector && connector.walletConnectProvider?.wc?.uri) {
       connector.walletConnectProvider = undefined
+    }
+
+    // MetaMask: if private chain isn't added yet, trigger add/switch prompt before activation
+    if (connector === injected && window?.ethereum?.isMetaMask) {
+      await switchToPrivateChain()
     }
 
     connector &&
