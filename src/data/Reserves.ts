@@ -1,7 +1,7 @@
 import { TokenAmount, Pair, Currency } from '@im33357/uniswap-v2-sdk'
 import { AddressZero } from '@ethersproject/constants'
 import { Contract } from '@ethersproject/contracts'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { abi as IUniswapV2PairABI } from '@uniswap/v2-core/build/IUniswapV2Pair.json'
 import { useActiveWeb3React } from '../hooks'
 
@@ -24,6 +24,11 @@ type PairLookupResult = {
   error?: boolean
 }
 
+const PAIR_CACHE_TTL_MS = 10_000
+const RESERVES_CACHE_TTL_MS = 5_000
+const REQUEST_DEBOUNCE_MS = 150
+const MAX_RESERVE_CONCURRENCY = 3
+
 export function usePairs(currencies: [Currency | undefined, Currency | undefined][]): [PairState, Pair | null][] {
   const { chainId, library } = useActiveWeb3React()
 
@@ -36,42 +41,108 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
     [chainId, currencies]
   )
 
+  const tokenAddressPairs = useMemo(() => {
+    return currencies.map(([currencyA, currencyB]) => {
+      const tokenA = wrappedCurrency(currencyA, chainId)
+      const tokenB = wrappedCurrency(currencyB, chainId)
+      return [tokenA?.address || '', tokenB?.address || ''] as const
+    })
+  }, [chainId, currencies])
+
+  const tokenAddressKey = useMemo(
+    () => tokenAddressPairs.map(([a, b]) => `${a}:${b}`).join('|'),
+    [tokenAddressPairs]
+  )
+
   const [results, setResults] = useState<PairLookupResult[]>([])
+  const cacheRef = useRef<{
+    pairAddressByKey: Map<string, { address?: string; updatedAt: number }>
+    reservesByPair: Map<string, { reserve0: string; reserve1: string; updatedAt: number }>
+  }>({
+    pairAddressByKey: new Map(),
+    reservesByPair: new Map()
+  })
+  const inflightRef = useRef<{
+    pairKey: Set<string>
+    reserves: Set<string>
+  }>({ pairKey: new Set(), reserves: new Set() })
 
   useEffect(() => {
     let stale = false
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined
+
+    const asyncPool = async <T, R>(items: T[], limit: number, handler: (item: T) => Promise<R>): Promise<R[]> => {
+      const results: R[] = []
+      let index = 0
+      const workers = new Array(Math.min(limit, items.length)).fill(null).map(async () => {
+        while (index < items.length) {
+          const currentIndex = index++
+          results[currentIndex] = await handler(items[currentIndex])
+        }
+      })
+      await Promise.all(workers)
+      return results
+    }
 
     const fetchPairs = async () => {
-      if (!library || tokens.length === 0) {
-        if (!stale) setResults(tokens.map(() => ({ loading: false })))
+      if (!library || tokenAddressPairs.length === 0) {
+        if (!stale) setResults(tokenAddressPairs.map(() => ({ loading: false })))
         return
       }
 
-      const initial = tokens.map<PairLookupResult>(() => ({ loading: true }))
+      const now = Date.now()
+      const initial = tokenAddressPairs.map<PairLookupResult>(([tokenA, tokenB]) => {
+        if (!tokenA || !tokenB || tokenA.toLowerCase() === tokenB.toLowerCase()) return { loading: false }
+        const pairKey = `${tokenA.toLowerCase()}:${tokenB.toLowerCase()}`
+        const cachedPair = cacheRef.current.pairAddressByKey.get(pairKey)
+        if (cachedPair && cachedPair.address) {
+          const cachedReserves = cacheRef.current.reservesByPair.get(cachedPair.address.toLowerCase())
+          if (cachedReserves && now - cachedReserves.updatedAt < RESERVES_CACHE_TTL_MS) {
+            return { loading: false, reserves: cachedReserves }
+          }
+        }
+        return { loading: true }
+      })
       if (!stale) setResults(initial)
 
       const routerAddress = getRouterAddress(chainId ?? undefined)
 
-      const pairAddresses = tokens.map(() => undefined as string | undefined)
+      const pairAddresses = tokenAddressPairs.map(() => undefined as string | undefined)
 
       try {
         if (!routerAddress) {
-          if (!stale) setResults(tokens.map(() => ({ loading: false })))
+          if (!stale) setResults(tokenAddressPairs.map(() => ({ loading: false })))
           return
         }
 
         const routerContract = new Contract(routerAddress, ROUTER_FACTORY_ABI, library)
         const factoryAddress = await routerContract.factory()
         if (!factoryAddress || factoryAddress === AddressZero) {
-          if (!stale) setResults(tokens.map(() => ({ loading: false })))
+          if (!stale) setResults(tokenAddressPairs.map(() => ({ loading: false })))
           return
         }
 
         const factoryContract = new Contract(factoryAddress, FACTORY_GET_PAIR_ABI, library)
         const pairLookups = await Promise.all(
-          tokens.map(([tokenA, tokenB]) => {
-            if (!tokenA || !tokenB || tokenA.equals(tokenB)) return Promise.resolve(undefined)
-            return factoryContract.getPair(tokenA.address, tokenB.address)
+          tokenAddressPairs.map(async ([tokenA, tokenB]) => {
+            if (!tokenA || !tokenB || tokenA.toLowerCase() === tokenB.toLowerCase()) {
+              return undefined
+            }
+            const pairKey = `${tokenA.toLowerCase()}:${tokenB.toLowerCase()}`
+            const cached = cacheRef.current.pairAddressByKey.get(pairKey)
+            if (cached && now - cached.updatedAt < PAIR_CACHE_TTL_MS) {
+              return cached.address
+            }
+            if (inflightRef.current.pairKey.has(pairKey)) return cached?.address
+            inflightRef.current.pairKey.add(pairKey)
+            try {
+              const address = await factoryContract.getPair(tokenA, tokenB)
+              const normalized = typeof address === 'string' ? address : undefined
+              cacheRef.current.pairAddressByKey.set(pairKey, { address: normalized, updatedAt: Date.now() })
+              return normalized
+            } finally {
+              inflightRef.current.pairKey.delete(pairKey)
+            }
           })
         )
 
@@ -81,37 +152,60 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
           }
         })
 
-        const reservesResults = await Promise.all(
-          pairAddresses.map(address => {
-            if (!address) return Promise.resolve(undefined)
-            const pairContract = new Contract(address, IUniswapV2PairABI, library)
-            return pairContract.getReserves()
-          })
+        const reservesResults = await asyncPool(
+          pairAddresses,
+          MAX_RESERVE_CONCURRENCY,
+          async address => {
+            if (!address) return undefined
+            const normalized = address.toLowerCase()
+            const cached = cacheRef.current.reservesByPair.get(normalized)
+            if (cached && now - cached.updatedAt < RESERVES_CACHE_TTL_MS) {
+              return cached
+            }
+            if (inflightRef.current.reserves.has(normalized)) return cached
+            inflightRef.current.reserves.add(normalized)
+            try {
+              const pairContract = new Contract(address, IUniswapV2PairABI, library)
+              const reserves = await pairContract.getReserves()
+              const stored = {
+                reserve0: reserves.reserve0.toString(),
+                reserve1: reserves.reserve1.toString(),
+                updatedAt: Date.now()
+              }
+              cacheRef.current.reservesByPair.set(normalized, stored)
+              return stored
+            } finally {
+              inflightRef.current.reserves.delete(normalized)
+            }
+          }
         )
 
-        const nextResults = tokens.map<PairLookupResult>(([tokenA, tokenB], index) => {
-          if (!tokenA || !tokenB || tokenA.equals(tokenB)) return { loading: false }
+        const nextResults = tokenAddressPairs.map<PairLookupResult>(([tokenA, tokenB], index) => {
+          if (!tokenA || !tokenB || tokenA.toLowerCase() === tokenB.toLowerCase()) return { loading: false }
           const reserves = reservesResults[index]
           if (!reserves) return { loading: false }
           return {
             loading: false,
-            reserves: { reserve0: reserves.reserve0.toString(), reserve1: reserves.reserve1.toString() }
+            reserves: { reserve0: reserves.reserve0, reserve1: reserves.reserve1 }
           }
         })
 
         if (!stale) setResults(nextResults)
       } catch (error) {
         console.debug('Failed to fetch pair reserves via router', error)
-        if (!stale) setResults(tokens.map(() => ({ loading: false, error: true })))
+        if (!stale) setResults(tokenAddressPairs.map(() => ({ loading: false, error: true })))
       }
     }
 
-    fetchPairs().catch(error => console.debug('Failed to load pairs', error))
+    debounceTimer = setTimeout(() => {
+      fetchPairs().catch(error => console.debug('Failed to load pairs', error))
+    }, REQUEST_DEBOUNCE_MS)
 
     return () => {
       stale = true
+      if (debounceTimer) clearTimeout(debounceTimer)
     }
-  }, [chainId, library, tokens])
+  }, [chainId, library, tokenAddressKey, tokenAddressPairs])
 
   return useMemo(() => {
     return results.map((result, i) => {
