@@ -61,20 +61,40 @@ export function clearConfigFromStorage(chainId: number): void {
 
 export function getRpcUrl(chainId: number = getChainId()): string {
   const stored = getConfigFromStorage(chainId)
-  return stored?.rpcUrl || getEnvRpcUrl()
+  if (stored?.rpcUrl) return stored.rpcUrl
+  if (chainId !== getChainId()) {
+    const fallback = getConfigFromStorage(getChainId())
+    if (fallback?.rpcUrl) return fallback.rpcUrl
+  }
+  return getEnvRpcUrl()
 }
 
 export function getRouterAddress(chainId: number = getChainId()): string {
   const stored = getConfigFromStorage(chainId)
-  return stored?.routerAddress || getEnvRouterAddress()
+  if (stored?.routerAddress) return stored.routerAddress
+  if (chainId !== getChainId()) {
+    const fallback = getConfigFromStorage(getChainId())
+    if (fallback?.routerAddress) return fallback.routerAddress
+  }
+  return getEnvRouterAddress()
 }
 
 export function getTokenAddress(chainId: number = getChainId()): string {
   const stored = getConfigFromStorage(chainId)
-  return stored?.tokenAddress || getEnvTokenAddress()
+  if (stored?.tokenAddress) return stored.tokenAddress
+  if (chainId !== getChainId()) {
+    const fallback = getConfigFromStorage(getChainId())
+    if (fallback?.tokenAddress) return fallback.tokenAddress
+  }
+  return getEnvTokenAddress()
 }
 
 export function getWethAddress(chainId: number = getChainId()): string {
   const stored = getConfigFromStorage(chainId)
-  return stored?.wethAddress || getEnvWethAddress()
+  if (stored?.wethAddress) return stored.wethAddress
+  if (chainId !== getChainId()) {
+    const fallback = getConfigFromStorage(getChainId())
+    if (fallback?.wethAddress) return fallback.wethAddress
+  }
+  return getEnvWethAddress()
 }
