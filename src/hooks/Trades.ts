@@ -1,6 +1,6 @@
 import { Currency, CurrencyAmount, Pair, Token, Trade, ETHER } from '@im33357/uniswap-v2-sdk'
 import flatMap from 'lodash.flatmap'
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 
 import { BASES_TO_CHECK_TRADES_AGAINST, CUSTOM_BASES } from '../constants'
 import { PairState, usePairs } from '../data/Reserves'
@@ -69,6 +69,8 @@ function useAllCommonPairs(currencyA?: Currency, currencyB?: Currency): Pair[] {
   const allPairs = usePairs(allPairCombinations)
 
   // only pass along valid pairs, non-duplicated pairs
+  const lastLogRef = useRef(0)
+
   return useMemo(() => {
     const states = allPairs.map(([state, pair]) => ({
       state,
@@ -76,14 +78,18 @@ function useAllCommonPairs(currencyA?: Currency, currencyB?: Currency): Pair[] {
       token0: pair?.token0?.address ?? null,
       token1: pair?.token1?.address ?? null
     }))
-    console.debug('[trade] pairs summary', {
-      chainId,
-      tokenA: tokenA?.address ?? null,
-      tokenB: tokenB?.address ?? null,
-      bases: bases.map(base => base.address),
-      combinations: allPairCombinations.map(([a, b]) => [a.address, b.address]),
-      states
-    })
+    const now = Date.now()
+    if (now - lastLogRef.current > 2000) {
+      lastLogRef.current = now
+      console.debug('[trade] pairs summary', {
+        chainId,
+        tokenA: tokenA?.address ?? null,
+        tokenB: tokenB?.address ?? null,
+        bases: bases.map(base => base.address),
+        combinations: allPairCombinations.map(([a, b]) => [a.address, b.address]),
+        states
+      })
+    }
 
     return Object.values(
       allPairs
