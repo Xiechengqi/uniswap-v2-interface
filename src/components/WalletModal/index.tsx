@@ -126,7 +126,7 @@ export default function WalletModal({
   ENSName?: string
 }) {
   // important that these are destructed from the account-specific web3-react context
-  const { active, account, connector, activate, error, chainId } = useWeb3React()
+  const { active, account, connector, activate, error, chainId, deactivate } = useWeb3React()
   const isPrivate = isPrivateChain(chainId ?? getPrivateChainId())
 
   const [walletView, setWalletView] = useState(WALLET_VIEWS.ACCOUNT)
@@ -318,6 +318,10 @@ export default function WalletModal({
           confirmedTransactions={confirmedTransactions}
           ENSName={ENSName}
           openOptions={() => setWalletView(WALLET_VIEWS.OPTIONS)}
+          onDiscountClick={() => {
+            deactivate()
+            toggleWalletModal()
+          }}
         />
       )
     }

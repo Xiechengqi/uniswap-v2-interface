@@ -3,6 +3,7 @@ export type AppConfig = {
   routerAddress?: string
   tokenAddress?: string
   tokenRequired?: boolean
+  blockscoutUrl?: string
   updatedAt?: number
 }
 
@@ -22,6 +23,10 @@ export function getEnvRouterAddress(): string {
 
 export function getEnvTokenAddress(): string {
   return process.env.REACT_APP_TOKEN_ADDRESS || ''
+}
+
+export function getEnvBlockscoutUrl(): string {
+  return process.env.REACT_APP_BLOCK_EXPLORER_URL || ''
 }
 
 export function getConfigFromStorage(chainId: number): AppConfig | null {
@@ -67,4 +72,21 @@ export function getRouterAddress(chainId: number = getChainId()): string {
 export function getTokenAddress(chainId: number = getChainId()): string {
   const stored = getConfigFromStorage(chainId)
   return stored?.tokenAddress || getEnvTokenAddress()
+}
+
+export function getBlockscoutUrl(chainId: number = getChainId()): string {
+  const stored = getConfigFromStorage(chainId)
+  return stored?.blockscoutUrl || getEnvBlockscoutUrl() || ''
+}
+
+export function getBlockscoutTokenListCacheKey(chainId: number = getChainId()): string {
+  return `blockscoutTokenList:${chainId}`
+}
+
+export function clearBlockscoutTokenListCache(chainId: number = getChainId()): void {
+  try {
+    localStorage.removeItem(getBlockscoutTokenListCacheKey(chainId))
+  } catch {
+    // ignore storage errors
+  }
 }

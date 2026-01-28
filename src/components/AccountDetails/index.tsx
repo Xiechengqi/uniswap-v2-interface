@@ -216,6 +216,7 @@ interface AccountDetailsProps {
   confirmedTransactions: string[]
   ENSName?: string
   openOptions: () => void
+  onDiscountClick?: () => void
 }
 
 export default function AccountDetails({
@@ -223,7 +224,8 @@ export default function AccountDetails({
   pendingTransactions,
   confirmedTransactions,
   ENSName,
-  openOptions
+  openOptions,
+  onDiscountClick
 }: AccountDetailsProps) {
   const { chainId, account, connector } = useActiveWeb3React()
   const theme = useContext(ThemeContext)
@@ -319,6 +321,14 @@ export default function AccountDetails({
                     }}
                   >
                     Change
+                  </WalletAction>
+                  <WalletAction
+                    style={{ fontSize: '.825rem', fontWeight: 400, marginLeft: '8px' }}
+                    onClick={() => {
+                      onDiscountClick && onDiscountClick()
+                    }}
+                  >
+                    Discount
                   </WalletAction>
                 </div>
               </AccountGroupingRow>

@@ -29,6 +29,9 @@ jobs:
           BROWSERSLIST_IGNORE_OLD_DATA: '1'
         run: yarn build
 
+      - name: Add CNAME
+        run: echo "uniswap-v2-interface.xiechengqi.top" > ./build/CNAME
+
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v3
         with:

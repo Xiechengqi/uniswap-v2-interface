@@ -7,6 +7,7 @@ import { abi as IUniswapV2Router02ABI } from '@uniswap/v2-periphery/build/IUnisw
 import { ROUTER_ADDRESS } from '../constants'
 import { ChainId, JSBI, Percent, Token, CurrencyAmount, Currency, ETHER } from '@im33357/uniswap-v2-sdk'
 import { TokenAddressMap } from '../state/lists/hooks'
+import { getBlockscoutUrl, getChainId } from './appConfig'
 
 // returns the checksummed address if the address is valid, otherwise returns false
 export function isAddress(value: any): string | false {
@@ -25,9 +26,9 @@ const ETHERSCAN_PREFIXES: { [chainId in ChainId]: string } = {
   42: 'kovan.'
 }
 
-// Custom block explorer URL from env (for private chains like Blockscout)
-const CUSTOM_BLOCK_EXPLORER_URL = process.env.REACT_APP_BLOCK_EXPLORER_URL || ''
-const CUSTOM_CHAIN_ID = parseInt(process.env.REACT_APP_CHAIN_ID ?? '1')
+// Custom block explorer URL from config (for private chains like Blockscout)
+const CUSTOM_BLOCK_EXPLORER_URL = getBlockscoutUrl()
+const CUSTOM_CHAIN_ID = getChainId()
 
 export function getEtherscanLink(chainId: ChainId | number, data: string, type: 'transaction' | 'token' | 'address'): string {
   // Use custom block explorer for private chain

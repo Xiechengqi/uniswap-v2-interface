@@ -26,9 +26,12 @@ import {
   getEnvRpcUrl,
   getEnvRouterAddress,
   getEnvTokenAddress,
+  getEnvBlockscoutUrl,
   getRpcUrl,
   getRouterAddress,
   getTokenAddress,
+  getBlockscoutUrl,
+  clearBlockscoutTokenListCache,
   saveConfigToStorage
 } from '../../utils/appConfig'
 import { isAddress } from '../../utils'
@@ -157,6 +160,7 @@ const ConfigRow = styled(AutoColumn)`
 const ConfigActions = styled.div`
   display: flex;
   gap: 0.5rem;
+  flex-wrap: wrap;
 `
 
 export default function SettingsTab() {
@@ -182,6 +186,9 @@ export default function SettingsTab() {
   const [tokenAddress, setTokenAddress] = useState<string>(
     storedConfig?.tokenAddress || getTokenAddress(chainId)
   )
+  const [blockscoutUrl, setBlockscoutUrl] = useState<string>(
+    storedConfig?.blockscoutUrl || getBlockscoutUrl(chainId)
+  )
   const [tokenRequired, setTokenRequired] = useState<boolean>(
     storedConfig?.tokenRequired ?? Boolean(storedConfig?.tokenAddress || getEnvTokenAddress())
   )
@@ -206,6 +213,14 @@ export default function SettingsTab() {
     if (!routerAddress || !isAddress(routerAddress)) return 'Router address is invalid.'
     if (tokenRequired && !tokenAddress) return 'Token address is required.'
     if (tokenAddress && !isAddress(tokenAddress)) return 'Token address is invalid.'
+    if (blockscoutUrl) {
+      try {
+        // eslint-disable-next-line no-new
+        new URL(blockscoutUrl)
+      } catch {
+        return 'Blockscout URL is invalid.'
+      }
+    }
     return null
   }
 
@@ -213,7 +228,13 @@ export default function SettingsTab() {
     const error = validateConfig()
     setConfigError(error)
     if (error) return
-    saveConfigToStorage(chainId, { rpcUrl, routerAddress, tokenAddress, tokenRequired })
+    saveConfigToStorage(chainId, {
+      rpcUrl,
+      routerAddress,
+      tokenAddress,
+      tokenRequired,
+      blockscoutUrl: blockscoutUrl ? blockscoutUrl : undefined
+    })
     setSaveMessage('Saved. Refreshing...')
     setTimeout(() => window.location.reload(), 300)
   }
@@ -265,9 +286,18 @@ export default function SettingsTab() {
     setRpcUrl(getEnvRpcUrl())
     setRouterAddress(getEnvRouterAddress())
     setTokenAddress(getEnvTokenAddress())
+    setBlockscoutUrl(getEnvBlockscoutUrl() || getBlockscoutUrl(chainId))
     setTokenRequired(Boolean(getEnvTokenAddress()))
     setConfigError(null)
     setSaveMessage('Reset to defaults. Refreshing...')
+    setTimeout(() => window.location.reload(), 300)
+  }
+
+  const handleRefreshBlockscoutList = () => {
+    clearBlockscoutTokenListCache(chainId)
+    setConfigError(null)
+    setTestMessage(null)
+    setSaveMessage('Refreshing Blockscout token list...')
     setTimeout(() => window.location.reload(), 300)
   }
 
@@ -415,6 +445,21 @@ export default function SettingsTab() {
                 placeholder="0x..."
               />
             </ConfigRow>
+            <ConfigRow>
+              <TYPE.black fontWeight={400} fontSize={12} color={theme.text2}>
+                Blockscout URL (optional)
+              </TYPE.black>
+              <ConfigInput
+                value={blockscoutUrl}
+                onChange={event => {
+                  setBlockscoutUrl(event.target.value)
+                  setConfigError(null)
+                  setSaveMessage(null)
+                  setTestMessage(null)
+                }}
+                placeholder="http://107.175.82.245:32795"
+              />
+            </ConfigRow>
             <RowBetween>
               <RowFixed>
                 <TYPE.black fontWeight={400} fontSize={14} color={theme.text2}>
@@ -440,6 +485,9 @@ export default function SettingsTab() {
               </ButtonPrimary>
               <ButtonPrimary padding="8px 12px" onClick={handleTestConnection} disabled={isTesting}>
                 {isTesting ? 'Testing...' : 'Test'}
+              </ButtonPrimary>
+              <ButtonPrimary padding="8px 12px" onClick={handleRefreshBlockscoutList}>
+                Refresh Blockscout List
               </ButtonPrimary>
               <ButtonError error={false} padding="8px 12px" onClick={handleResetConfig}>
                 Reset

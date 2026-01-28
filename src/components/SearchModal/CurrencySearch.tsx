@@ -8,8 +8,10 @@ import { ThemeContext } from 'styled-components'
 import { useActiveWeb3React } from '../../hooks'
 import { useAllTokens, useToken } from '../../hooks/Tokens'
 import { useSelectedListInfo } from '../../state/lists/hooks'
-import { CloseIcon, LinkStyledButton, TYPE } from '../../theme'
+import { CloseIcon, ExternalLink, LinkStyledButton, TYPE } from '../../theme'
 import { isAddress } from '../../utils'
+import { getBlockscoutUrl } from '../../utils/appConfig'
+import { isPrivateChain } from '../../utils/switchNetwork'
 import Card from '../Card'
 import Column from '../Column'
 import ListLogo from '../ListLogo'
@@ -45,6 +47,8 @@ export function CurrencySearch({
   const { t } = useTranslation()
   const { chainId } = useActiveWeb3React()
   const theme = useContext(ThemeContext)
+  const isPrivate = chainId ? isPrivateChain(chainId) : false
+  const blockscoutUrl = chainId ? getBlockscoutUrl(chainId) : ''
 
   const fixedList = useRef<FixedSizeList>()
   const [searchQuery, setSearchQuery] = useState<string>('')
@@ -187,27 +191,35 @@ export function CurrencySearch({
 
       <Separator />
       <Card>
-        <RowBetween>
-          {selectedListInfo.current ? (
-            <Row>
-              {selectedListInfo.current.logoURI ? (
-                <ListLogo
-                  style={{ marginRight: 12 }}
-                  logoURI={selectedListInfo.current.logoURI}
-                  alt={`${selectedListInfo.current.name} list logo`}
-                />
-              ) : null}
-              <TYPE.main id="currency-search-selected-list-name">{selectedListInfo.current.name}</TYPE.main>
-            </Row>
+        <Column>
+          <RowBetween>
+            {selectedListInfo.current ? (
+              <Row>
+                {selectedListInfo.current.logoURI ? (
+                  <ListLogo
+                    style={{ marginRight: 12 }}
+                    logoURI={selectedListInfo.current.logoURI}
+                    alt={`${selectedListInfo.current.name} list logo`}
+                  />
+                ) : null}
+                <TYPE.main id="currency-search-selected-list-name">{selectedListInfo.current.name}</TYPE.main>
+              </Row>
+            ) : null}
+            <LinkStyledButton
+              style={{ fontWeight: 500, color: theme.text2, fontSize: 16 }}
+              onClick={onChangeList}
+              id="currency-search-change-list-button"
+            >
+              {selectedListInfo.current ? 'Change' : 'Select a list'}
+            </LinkStyledButton>
+          </RowBetween>
+          {isPrivate && blockscoutUrl ? (
+            <Text fontSize={12} color={theme.text2} style={{ marginTop: 8 }}>
+              Blockscout token list（仅私链有效）:{' '}
+              <ExternalLink href={blockscoutUrl}>{blockscoutUrl}</ExternalLink>
+            </Text>
           ) : null}
-          <LinkStyledButton
-            style={{ fontWeight: 500, color: theme.text2, fontSize: 16 }}
-            onClick={onChangeList}
-            id="currency-search-change-list-button"
-          >
-            {selectedListInfo.current ? 'Change' : 'Select a list'}
-          </LinkStyledButton>
-        </RowBetween>
+        </Column>
       </Card>
     </Column>
   )

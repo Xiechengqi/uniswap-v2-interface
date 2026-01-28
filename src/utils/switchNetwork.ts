@@ -1,5 +1,5 @@
 // 私有链配置
-import { getChainId, getRpcUrl } from './appConfig'
+import { getBlockscoutUrl, getChainId, getRpcUrl } from './appConfig'
 
 const PRIVATE_CHAIN_ID = getChainId()
 const PRIVATE_CHAIN_ID_HEX = `0x${PRIVATE_CHAIN_ID.toString(16)}`
@@ -13,9 +13,7 @@ const CHAIN_CONFIG = {
     decimals: 18
   },
   rpcUrls: [getRpcUrl()],
-  blockExplorerUrls: process.env.REACT_APP_BLOCK_EXPLORER_URL
-    ? [process.env.REACT_APP_BLOCK_EXPLORER_URL]
-    : undefined
+  blockExplorerUrls: getBlockscoutUrl() ? [getBlockscoutUrl()] : undefined
 }
 
 export async function switchToPrivateChain(): Promise<boolean> {
