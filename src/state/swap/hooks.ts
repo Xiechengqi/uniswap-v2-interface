@@ -129,8 +129,22 @@ export function useDerivedSwapInfo(): {
     recipient
   } = useSwapState()
 
-  const inputCurrency = useCurrency(inputCurrencyId)
-  const outputCurrency = useCurrency(outputCurrencyId)
+  const lockedTokenAddress = getTokenAddress()
+  const normalizedLocked = lockedTokenAddress ? lockedTokenAddress.toLowerCase() : ''
+  const normalizedInput = (inputCurrencyId ?? '').toLowerCase()
+  const normalizedOutput = (outputCurrencyId ?? '').toLowerCase()
+  const hasLockedPair =
+    normalizedLocked &&
+    ((normalizedInput === 'eth' && normalizedOutput === normalizedLocked) ||
+      (normalizedInput === normalizedLocked && normalizedOutput === 'eth'))
+
+  const effectiveInputCurrencyId =
+    normalizedLocked && !hasLockedPair ? 'ETH' : inputCurrencyId
+  const effectiveOutputCurrencyId =
+    normalizedLocked && !hasLockedPair ? lockedTokenAddress : outputCurrencyId
+
+  const inputCurrency = useCurrency(effectiveInputCurrencyId)
+  const outputCurrency = useCurrency(effectiveOutputCurrencyId)
   const recipientLookup = useENS(recipient ?? undefined)
   const to: string | null = (recipient === null ? account : recipientLookup.address) ?? null
 
