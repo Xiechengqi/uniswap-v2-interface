@@ -211,6 +211,24 @@ export function usePairs(currencies: [Currency | undefined, Currency | undefined
           }
         )
         console.debug('[pairs] reservesResults', { reservesResults })
+        const missingReserves = pairAddresses.filter((address, index) => address && !reservesResults[index])
+        if (missingReserves.length > 0) {
+          await asyncPool(
+            missingReserves,
+            MAX_RESERVE_CONCURRENCY,
+            async address => {
+              if (!address) return undefined
+              try {
+                const pairContract = new Contract(address, IUniswapV2PairABI, library)
+                const [token0, token1] = await Promise.all([pairContract.token0(), pairContract.token1()])
+                console.debug('[pairs] token0/token1', { address, token0, token1 })
+              } catch (error) {
+                console.debug('[pairs] token0/token1 failed', { address, error })
+              }
+              return undefined
+            }
+          )
+        }
 
         const nextResults = effectiveTokenAddressPairs.map<PairLookupResult>(([tokenA, tokenB], index) => {
           if (!tokenA || !tokenB || tokenA.toLowerCase() === tokenB.toLowerCase()) return { loading: false }

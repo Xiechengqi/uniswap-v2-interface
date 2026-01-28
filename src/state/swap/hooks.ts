@@ -200,6 +200,32 @@ export function useDerivedSwapInfo(): {
       ? lockedToken
       : ETHER
     : defaultOutputCurrency
+
+  useEffect(() => {
+    console.debug('[swap] currency state', {
+      chainId,
+      lockedTokenAddress,
+      lockedTokenMeta,
+      inputCurrencyId,
+      outputCurrencyId,
+      effectiveInputCurrencyId,
+      effectiveOutputCurrencyId,
+      inputCurrency: inputCurrency?.symbol,
+      outputCurrency: outputCurrency?.symbol,
+      inputType: inputCurrency instanceof Token ? 'Token' : inputCurrency === ETHER ? 'ETH' : 'Unknown',
+      outputType: outputCurrency instanceof Token ? 'Token' : outputCurrency === ETHER ? 'ETH' : 'Unknown'
+    })
+  }, [
+    chainId,
+    effectiveInputCurrencyId,
+    effectiveOutputCurrencyId,
+    inputCurrency,
+    inputCurrencyId,
+    lockedTokenAddress,
+    lockedTokenMeta,
+    outputCurrency,
+    outputCurrencyId
+  ])
   const recipientLookup = useENS(recipient ?? undefined)
   const to: string | null = (recipient === null ? account : recipientLookup.address) ?? null
 
@@ -277,6 +303,19 @@ export function useDerivedSwapInfo(): {
   if (balanceIn && amountIn && balanceIn.lessThan(amountIn)) {
     inputError = 'Insufficient ' + amountIn.currency.symbol + ' balance'
   }
+
+  useEffect(() => {
+    console.debug('[swap] trade state', {
+      isExactIn,
+      typedValue,
+      parsedAmount: parsedAmount?.toExact?.() ?? null,
+      inputSymbol: inputCurrency?.symbol,
+      outputSymbol: outputCurrency?.symbol,
+      v2Trade: Boolean(v2Trade),
+      v2Route: v2Trade?.route?.path?.map(t => t.symbol),
+      inputError
+    })
+  }, [isExactIn, typedValue, parsedAmount, inputCurrency, outputCurrency, v2Trade, inputError])
 
   return {
     currencies,
@@ -358,6 +397,11 @@ export function useDefaultsFromURLSearch():
     if (!chainId) return
     const lockedTokenAddress = getTokenAddress()
     if (lockedTokenAddress) {
+      console.debug('[swap] defaults lock', {
+        chainId,
+        inputCurrencyId: 'ETH',
+        outputCurrencyId: lockedTokenAddress
+      })
       dispatch(
         replaceSwapState({
           typedValue: '',
@@ -371,6 +415,11 @@ export function useDefaultsFromURLSearch():
       return
     }
     const parsed = queryParametersToSwapState(parsedQs)
+    console.debug('[swap] defaults from url', {
+      chainId,
+      inputCurrencyId: parsed[Field.INPUT].currencyId,
+      outputCurrencyId: parsed[Field.OUTPUT].currencyId
+    })
 
     dispatch(
       replaceSwapState({
