@@ -1,4 +1,4 @@
-import { Currency, CurrencyAmount, Pair, Token, Trade } from '@im33357/uniswap-v2-sdk'
+import { Currency, CurrencyAmount, Pair, Token, Trade, ETHER } from '@im33357/uniswap-v2-sdk'
 import flatMap from 'lodash.flatmap'
 import { useMemo } from 'react'
 
@@ -16,6 +16,13 @@ function useAllCommonPairs(currencyA?: Currency, currencyB?: Currency): Pair[] {
   const [tokenA, tokenB] = chainId
     ? [wrappedCurrency(currencyA, chainId), wrappedCurrency(currencyB, chainId)]
     : [undefined, undefined]
+
+  if (!bases.length && chainId) {
+    const weth = wrappedCurrency(ETHER, chainId)
+    if (weth) {
+      bases.push(weth)
+    }
+  }
 
   const basePairs: [Token, Token][] = useMemo(
     () =>
