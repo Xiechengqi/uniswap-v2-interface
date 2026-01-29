@@ -1,0 +1,43 @@
+name: Sync to Private Repository
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync to private git repository
+        if: success()
+        run: |
+          # 配置 SSH
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PRIVATE_REPO_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          # 配置 SSH known_hosts
+          ssh-keyscan -p 22222 107.175.82.64 >> ~/.ssh/known_hosts 2>/dev/null || true
+
+          # 配置 git
+          git config user.name "root"
+          git config user.email "root@bitcoin.org"
+
+          # 添加私有仓库为远程仓库
+          git remote add private ssh://root@107.175.82.64:22222/3303/uniswap-v2-interface.git || true
+
+          # 推送所有分支和标签到私有仓库
+          git push private --all --force
+          git push private --tags --force
+
+          # 清理 SSH 密钥
+          rm -f ~/.ssh/id_rsa
+        env:
+          GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -p 22222"
